@@ -1,2 +1,10 @@
-﻿{
+{
+  "openHeatMap": "热力图",
+  "heatmapTitle": "近一年笔记热力图",
+  "loading": "加载中…",
+  "loadFailed": "加载热力图失败",
+  "less": "少",
+  "more": "多",
+  "totalCount": "共 ${count} 个段落",
+  "cellTooltip": "${date}：${count} 个段落"
 }

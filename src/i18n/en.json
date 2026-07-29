@@ -1,2 +1,10 @@
 {
+  "openHeatMap": "Heat Map",
+  "heatmapTitle": "Note activity (past year)",
+  "loading": "Loading…",
+  "loadFailed": "Failed to load heat map",
+  "less": "Less",
+  "more": "More",
+  "totalCount": "${count} paragraphs in total",
+  "cellTooltip": "${date}: ${count} paragraphs"
 }
