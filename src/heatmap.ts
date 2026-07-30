@@ -127,10 +127,11 @@ export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement 
                 day.className = "jchm__cell jchm__cell--empty";
             } else {
                 const level = cell.count <= 0 ? 0 : levels(cell.count);
-                day.className = `jchm__cell jchm__cell--l${level}`;
-                day.title = i18n.cellTooltip
+                day.className = `jchm__cell jchm__cell--l${level} ariaLabel`;
+                day.setAttribute("data-position", "north");
+                day.setAttribute("aria-label", i18n.cellTooltip
                     .replace("${date}", formatDisplayDate(cell.date))
-                    .replace("${count}", String(cell.count));
+                    .replace("${count}", String(cell.count)));
             }
             col.appendChild(day);
         }
@@ -259,20 +260,28 @@ function buildYearGrid(countMap: Map<string, number>): {cells: GridCell[]; weeks
 
 function buildMonthLabels(weeks: GridCell[][], months: string[]): string[] {
     const labels: string[] = [];
-    let lastMonth = -1;
-    for (const week of weeks) {
-        const firstValid = week.find((c) => c.date);
-        if (!firstValid) {
-            labels.push("");
-            continue;
-        }
-        const month = Number(firstValid.date.slice(4, 6)) - 1;
-        if (month !== lastMonth) {
+    let firstLabelIndex = -1;
+    let secondLabelIndex = -1;
+
+    for (let i = 0; i < weeks.length; i++) {
+        // 只挂在包含该月 1 号的周列上；开头残月不显示
+        const firstOfMonth = weeks[i].find((c) => c.date && c.date.endsWith("01"));
+        if (firstOfMonth) {
+            const month = Number(firstOfMonth.date.slice(4, 6)) - 1;
             labels.push(months[month] || "");
-            lastMonth = month;
+            if (firstLabelIndex < 0) {
+                firstLabelIndex = i;
+            } else if (secondLabelIndex < 0) {
+                secondLabelIndex = i;
+            }
         } else {
             labels.push("");
         }
+    }
+
+    // 开头月份若周数过少，文案会溢出并与下一月重叠，故不显示
+    if (firstLabelIndex >= 0 && secondLabelIndex >= 0 && secondLabelIndex - firstLabelIndex < 2) {
+        labels[firstLabelIndex] = "";
     }
     return labels;
 }
