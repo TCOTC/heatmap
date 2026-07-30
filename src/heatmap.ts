@@ -1,5 +1,7 @@
 import {fetchSyncPost} from "siyuan";
 
+export type StatMode = "created" | "updated" | "mixed";
+
 export interface DayCount {
     date: string; // YYYYMMDD
     count: number;
@@ -10,7 +12,14 @@ export interface HeatMapI18n {
     more: string;
     totalCount: string;
     cellTooltip: string;
+    statMode: string;
+    statModeCreated: string;
+    statModeUpdated: string;
+    statModeMixed: string;
 }
+
+/** 容器块：文档 / 列表 / 列表项 / 引述 / 超级块 / 标注 */
+const CONTAINER_TYPES = "('d', 'l', 'i', 'b', 's', 'callout')";
 
 const LABELS_ZH = {
     weekdays: ["日", "一", "二", "三", "四", "五", "六"],
@@ -27,21 +36,35 @@ function getLocaleLabels() {
     return String(lang).toLowerCase().startsWith("zh") ? LABELS_ZH : LABELS_EN;
 }
 
-/** 查询近一年按日段落数量 */
-export async function queryYearActivity(): Promise<DayCount[]> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const start = new Date(today);
-    start.setDate(start.getDate() - 364);
-    // 与热力图网格对齐到周日
-    start.setDate(start.getDate() - start.getDay());
-    const startKey = formatDateKey(start);
+/** 查询近一年按日叶子块数量 */
+export async function queryYearActivity(mode: StatMode = "created"): Promise<DayCount[]> {
+    const startKey = getYearStartKey();
+    const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
+    let sql: string;
 
-    const sql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count
+    if (mode === "updated") {
+        sql = `SELECT SUBSTR(updated, 1, 8) AS date, COUNT(*) AS count
 FROM blocks
-WHERE type = 'p' AND created >= '${startKey}'
+WHERE ${leafFilter} AND updated >= '${startKey}' AND updated != ''
+GROUP BY SUBSTR(updated, 1, 8)
+ORDER BY date ASC`;
+    } else if (mode === "mixed") {
+        // UNION 按 (date, id) 去重：同日既创建又更新只计 1；跨日则两天各计 1
+        sql = `SELECT date, COUNT(*) AS count FROM (
+  SELECT SUBSTR(created, 1, 8) AS date, id FROM blocks
+  WHERE ${leafFilter} AND created >= '${startKey}'
+  UNION
+  SELECT SUBSTR(updated, 1, 8) AS date, id FROM blocks
+  WHERE ${leafFilter} AND updated >= '${startKey}' AND updated != ''
+) GROUP BY date
+ORDER BY date ASC`;
+    } else {
+        sql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count
+FROM blocks
+WHERE ${leafFilter} AND created >= '${startKey}'
 GROUP BY SUBSTR(created, 1, 8)
 ORDER BY date ASC`;
+    }
 
     const response = await fetchSyncPost("/api/query/sql", {stmt: sql});
     if (response.code !== 0 || !Array.isArray(response.data)) {
@@ -54,7 +77,7 @@ ORDER BY date ASC`;
     }));
 }
 
-/** 渲染近一年 GitHub 风格热力图 */
+/** 渲染近一年 GitHub 风格热力图（仅图表区域） */
 export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement {
     const countMap = new Map(days.map((d) => [d.date, d.count]));
     const {cells, weeks} = buildYearGrid(countMap);
@@ -142,6 +165,58 @@ export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement 
 
     root.appendChild(footer);
     return root;
+}
+
+/** 构建统计方式下拉菜单 */
+export function renderStatModeSelect(
+    i18n: HeatMapI18n,
+    mode: StatMode,
+    onChange: (mode: StatMode) => void,
+): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "jchm__config";
+
+    const label = document.createElement("span");
+    label.className = "jchm__config-label";
+    label.textContent = i18n.statMode;
+    row.appendChild(label);
+
+    const select = document.createElement("select");
+    select.className = "b3-select";
+    const options: Array<{value: StatMode; text: string}> = [
+        {value: "created", text: i18n.statModeCreated},
+        {value: "updated", text: i18n.statModeUpdated},
+        {value: "mixed", text: i18n.statModeMixed},
+    ];
+    for (const opt of options) {
+        const option = document.createElement("option");
+        option.value = opt.value;
+        option.textContent = opt.text;
+        if (opt.value === mode) {
+            option.selected = true;
+        }
+        select.appendChild(option);
+    }
+    select.addEventListener("change", () => {
+        onChange(select.value as StatMode);
+    });
+    row.appendChild(select);
+
+    return row;
+}
+
+export function isStatMode(value: unknown): value is StatMode {
+    return value === "created" || value === "updated" || value === "mixed";
+}
+
+function getYearStartKey(): string {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(start.getDate() - 364);
+    // 与热力图网格对齐到周日
+    start.setDate(start.getDate() - start.getDay());
+    return formatDateKey(start);
 }
 
 interface GridCell {

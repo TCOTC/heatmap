@@ -1,123 +1,150 @@
 .jchm-dialog {
   padding-bottom: 8px;
-}
 
-.jchm {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  color: var(--b3-theme-on-surface);
-  font-size: 12px;
-
-  &__scroll {
-    overflow-x: auto;
-    padding-bottom: 4px;
-  }
-
-  &__months,
-  &__body {
-    display: flex;
-    align-items: flex-start;
-    gap: 3px;
-    min-width: max-content;
-  }
-
-  &__months > :first-child,
-  &__weekdays {
-    width: 18px;
-    flex: 0 0 18px;
-  }
-
-  &__month {
-    width: 11px;
-    flex: 0 0 11px;
-    height: 18px;
-    line-height: 18px;
-    white-space: nowrap;
-    overflow: visible;
-    color: var(--b3-theme-on-surface-light);
-  }
-
-  &__body {
-    align-items: stretch;
-  }
-
-  &__weekdays {
+  .jchm-panel {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    margin-right: 0;
-  }
-
-  &__weekday {
-    width: 18px;
-    height: 11px;
-    line-height: 11px;
-    text-align: right;
-    color: var(--b3-theme-on-surface-light);
-  }
-
-  &__grid {
-    display: flex;
-    gap: 3px;
-  }
-
-  &__week {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    width: 11px;
-  }
-
-  &__cell {
-    width: 11px;
-    height: 11px;
-    border-radius: 2px;
-    box-sizing: border-box;
-
-    &--empty {
-      visibility: hidden;
-    }
-
-    &--l0 {
-      background-color: var(--b3-theme-surface-lighter);
-      box-shadow: inset 0 0 0 1px var(--b3-border-color);
-    }
-
-    &--l1 {
-      background-color: color-mix(in srgb, var(--b3-theme-primary) 28%, var(--b3-theme-surface));
-    }
-
-    &--l2 {
-      background-color: color-mix(in srgb, var(--b3-theme-primary) 48%, var(--b3-theme-surface));
-    }
-
-    &--l3 {
-      background-color: color-mix(in srgb, var(--b3-theme-primary) 72%, var(--b3-theme-surface));
-    }
-
-    &--l4 {
-      background-color: var(--b3-theme-primary);
-    }
-  }
-
-  &__footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
     gap: 12px;
-    flex-wrap: wrap;
-    color: var(--b3-theme-on-surface-light);
-  }
 
-  &__legend {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    margin-left: auto;
+    &__chart {
+      min-height: 120px;
+    }
 
-    .jchm__cell {
-      flex: 0 0 auto;
+    .jchm {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      color: var(--b3-theme-on-surface);
+      font-size: 12px;
+
+      &__scroll {
+        overflow-x: auto;
+        padding-bottom: 4px;
+
+        .jchm__months,
+        .jchm__body {
+          display: flex;
+          align-items: flex-start;
+          gap: 3px;
+          min-width: max-content;
+        }
+
+        .jchm__months {
+          > :first-child {
+            width: 18px;
+            flex: 0 0 18px;
+          }
+
+          .jchm__month {
+            width: 11px;
+            flex: 0 0 11px;
+            height: 18px;
+            line-height: 18px;
+            white-space: nowrap;
+            overflow: visible;
+            color: var(--b3-theme-on-surface-light);
+          }
+        }
+
+        .jchm__body {
+          align-items: stretch;
+
+          .jchm__weekdays {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            width: 18px;
+            flex: 0 0 18px;
+            margin-right: 0;
+
+            .jchm__weekday {
+              width: 18px;
+              height: 11px;
+              line-height: 11px;
+              text-align: right;
+              color: var(--b3-theme-on-surface-light);
+            }
+          }
+
+          .jchm__grid {
+            display: flex;
+            gap: 3px;
+
+            .jchm__week {
+              display: flex;
+              flex-direction: column;
+              gap: 3px;
+              width: 11px;
+            }
+          }
+        }
+      }
+
+      &__cell {
+        width: 11px;
+        height: 11px;
+        border-radius: 2px;
+        box-sizing: border-box;
+
+        &--empty {
+          visibility: hidden;
+        }
+
+        &--l0 {
+          background-color: var(--b3-theme-surface-lighter);
+          box-shadow: inset 0 0 0 1px var(--b3-border-color);
+        }
+
+        &--l1 {
+          background-color: color-mix(in srgb, var(--b3-theme-primary) 28%, var(--b3-theme-surface));
+        }
+
+        &--l2 {
+          background-color: color-mix(in srgb, var(--b3-theme-primary) 48%, var(--b3-theme-surface));
+        }
+
+        &--l3 {
+          background-color: color-mix(in srgb, var(--b3-theme-primary) 72%, var(--b3-theme-surface));
+        }
+
+        &--l4 {
+          background-color: var(--b3-theme-primary);
+        }
+      }
+
+      &__footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        color: var(--b3-theme-on-surface-light);
+
+        .jchm__legend {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          margin-left: auto;
+
+          .jchm__cell {
+            flex: 0 0 auto;
+          }
+        }
+      }
+    }
+
+    .jchm__config {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding-top: 4px;
+      border-top: 1px solid var(--b3-border-color);
+
+      &-label {
+        flex: 0 0 auto;
+        color: var(--b3-theme-on-surface);
+        white-space: nowrap;
+      }
     }
   }
 }
