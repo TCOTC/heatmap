@@ -6,13 +6,20 @@ import {
 } from "siyuan";
 import {getI18n} from "./i18n";
 import {
+    buildYearOptions,
+    isDisplayMode,
     isStatMode,
     isWeekStart,
+    isYearOrder,
+    normalizeFromYear,
     openConfigMenu,
-    queryYearActivity,
+    queryActivity,
+    queryEarliestYear,
     renderHeatMap,
+    type DisplayMode,
     type StatMode,
     type WeekStart,
+    type YearOrder,
 } from "./heatmap";
 import "./index.scss";
 
@@ -21,12 +28,21 @@ const STORAGE_NAME = "config.json";
 interface PluginConfig {
     statMode: StatMode;
     weekStart: WeekStart;
+    displayMode: DisplayMode;
+    fromYear: number | null;
+    yearOrder: YearOrder;
 }
 
 export default class HeatMap extends Plugin {
     private isMobile = false;
     private dialog?: Dialog;
-    private config: PluginConfig = {statMode: "created", weekStart: "monday"};
+    private config: PluginConfig = {
+        statMode: "created",
+        weekStart: "monday",
+        displayMode: "recent",
+        fromYear: null,
+        yearOrder: "newestFirst",
+    };
     private refreshing = false;
 
     onload() {
@@ -75,9 +91,26 @@ export default class HeatMap extends Plugin {
 
     private normalizeConfig(data: unknown): PluginConfig {
         const raw = (data && typeof data === "object") ? data as Record<string, unknown> : {};
+        let fromYear = normalizeFromYear(raw.fromYear);
+        // 兼容旧版 selectedYears：取其中最早年作为起点
+        if (fromYear == null && Array.isArray(raw.selectedYears)) {
+            const legacy = raw.selectedYears
+                .map((y) => Number(y))
+                .filter((y) => Number.isInteger(y) && y >= 1970 && y <= 2100);
+            if (legacy.length > 0) {
+                fromYear = Math.min(...legacy);
+            }
+        }
+        let displayMode: DisplayMode = isDisplayMode(raw.displayMode) ? raw.displayMode : "recent";
+        if (displayMode === "years" && fromYear == null) {
+            displayMode = "recent";
+        }
         return {
             statMode: isStatMode(raw.statMode) ? raw.statMode : "created",
             weekStart: isWeekStart(raw.weekStart) ? raw.weekStart : "monday",
+            displayMode,
+            fromYear: displayMode === "years" ? fromYear : null,
+            yearOrder: isYearOrder(raw.yearOrder) ? raw.yearOrder : "newestFirst",
         };
     }
 
@@ -107,6 +140,7 @@ export default class HeatMap extends Plugin {
             },
         });
 
+        this.dialog.element.querySelector(".b3-dialog")?.classList.add("jchm-dialog-host");
         this.dialog.element.querySelector(".b3-dialog__container")?.classList.add("jchm-dialog__container");
 
         const container = this.dialog.element.querySelector(".jchm-dialog") as HTMLElement;
@@ -116,6 +150,60 @@ export default class HeatMap extends Plugin {
 
         this.mountSettingsButton(this.dialog.element);
         await this.renderPanel(container);
+        this.fitDialogToViewport();
+    }
+
+    /** 按当前 top/视口调整 maxHeight，必要时上移，避免多年份内容向下溢出 */
+    private fitDialogToViewport() {
+        const el = this.dialog?.element.querySelector(".b3-dialog__container") as HTMLElement | null;
+        if (!el) {
+            return;
+        }
+
+        const margin = 16;
+        requestAnimationFrame(() => {
+            if (!this.dialog) {
+                return;
+            }
+
+            const maxAllowed = Math.max(160, window.innerHeight - 2 * margin);
+            // 用户已拖拽出固定高度时保留，只更新上限
+            const userSized = !!el.style.height && el.style.height !== "auto";
+
+            if (!userSized) {
+                el.style.maxHeight = "none";
+                el.style.height = "auto";
+                const contentH = el.offsetHeight;
+                const targetH = Math.min(contentH, maxAllowed);
+
+                const pinned = el.style.left !== "" && el.style.left !== "auto";
+                if (pinned) {
+                    let top = parseFloat(el.style.top);
+                    if (!Number.isFinite(top)) {
+                        top = el.getBoundingClientRect().top;
+                    }
+                    if (top + targetH + margin > window.innerHeight) {
+                        top = Math.max(margin, window.innerHeight - margin - targetH);
+                        el.style.top = `${top}px`;
+                    }
+                    el.style.maxHeight = `${Math.max(160, window.innerHeight - top - margin)}px`;
+                } else {
+                    el.style.maxHeight = `${maxAllowed}px`;
+                }
+                el.style.height = "auto";
+            } else {
+                const pinned = el.style.left !== "" && el.style.left !== "auto";
+                if (pinned) {
+                    let top = parseFloat(el.style.top);
+                    if (!Number.isFinite(top)) {
+                        top = el.getBoundingClientRect().top;
+                    }
+                    el.style.maxHeight = `${Math.max(160, window.innerHeight - top - margin)}px`;
+                } else {
+                    el.style.maxHeight = `${maxAllowed}px`;
+                }
+            }
+        });
     }
 
     private mountSettingsButton(dialogEl: HTMLElement) {
@@ -131,6 +219,11 @@ export default class HeatMap extends Plugin {
         btn.setAttribute("data-position", "north");
         btn.setAttribute("aria-label", i18n.settings);
         btn.innerHTML = `<svg><use xlink:href="#iconSettings"></use></svg>`;
+        btn.addEventListener("mousedown", (event) => {
+            // 避免点设置时触发标题栏 drag，把弹窗钉成固定 top/left
+            event.preventDefault();
+            event.stopPropagation();
+        });
         btn.addEventListener("click", (event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -145,11 +238,20 @@ export default class HeatMap extends Plugin {
         }
     }
 
-    private openSettingsMenu(rect: DOMRect) {
+    private async openSettingsMenu(rect: DOMRect) {
         const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
+        let earliest: number | null = null;
+        try {
+            earliest = await queryEarliestYear(this.config.statMode);
+        } catch (e) {
+            console.error(this.displayName, "query earliest year failed", e);
+        }
+        const yearOptions = buildYearOptions(earliest, this.config.fromYear);
+
         openConfigMenu({
             i18n: getI18n(),
             config: this.config,
+            yearOptions,
             rect,
             isMobile: this.isMobile,
             onChange: (patch) => {
@@ -187,11 +289,12 @@ export default class HeatMap extends Plugin {
             chartHost.textContent = i18n.loading;
         }
         try {
-            const days = await queryYearActivity(this.config.statMode, this.config.weekStart);
+            const days = await queryActivity(this.config.statMode, this.config);
             if (!this.dialog) {
                 return;
             }
-            chartHost.replaceChildren(renderHeatMap(days, i18n, this.config.weekStart));
+            chartHost.replaceChildren(renderHeatMap(days, i18n, this.config));
+            this.fitDialogToViewport();
         } catch (e) {
             console.error(this.displayName, e);
             if (!this.dialog) {
@@ -199,6 +302,7 @@ export default class HeatMap extends Plugin {
             }
             chartHost.textContent = i18n.loadFailed;
             showMessage(`${this.displayName}: ${i18n.loadFailed}`);
+            this.fitDialogToViewport();
         } finally {
             this.refreshing = false;
         }

@@ -15,6 +15,11 @@ const ZH = {
     weekStart: "每周第一天",
     weekStartMonday: "周一",
     weekStartSunday: "周日",
+    displayRange: "显示范围",
+    displayRecentYear: "最近一年",
+    yearOrder: "年份排序",
+    yearOrderNewestFirst: "最近的年份在前",
+    yearOrderOldestFirst: "最近的年份在后",
     weekdays: ["日", "一", "二", "三", "四", "五", "六"],
     months: ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"],
 };
@@ -38,6 +43,11 @@ const EN: I18n = {
     weekStart: "Week starts on",
     weekStartMonday: "Monday",
     weekStartSunday: "Sunday",
+    displayRange: "Display range",
+    displayRecentYear: "Past year",
+    yearOrder: "Year order",
+    yearOrderNewestFirst: "Newest years first",
+    yearOrderOldestFirst: "Oldest years first",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
 };

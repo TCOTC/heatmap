@@ -1,86 +1,145 @@
+/* 覆盖 flex 子项默认 min-height:auto，否则 max-height 压不住内容，居中后向下溢出 */
+.b3-dialog.jchm-dialog-host {
+  align-items: safe center;
+}
+
 .jchm-dialog__container {
   background-color: var(--b3-menu-background);
+  min-height: 0;
+  /* 不能 overflow:hidden：思源 resize 手柄定位在容器外 -8px，会被裁掉导致无法拖拽改尺寸 */
+
+  > .b3-dialog__body {
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
 }
 
 .jchm-dialog {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   padding-bottom: 8px;
+  overflow: hidden;
 
   .jchm-panel {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 12px;
 
     &__chart {
-      min-height: 120px;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     .jchm {
+      flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       gap: 12px;
       color: var(--b3-theme-on-surface);
       font-size: 12px;
 
+      /* 外层只负责纵向滚动 */
       &__scroll {
-        overflow-x: auto;
-        padding-bottom: 4px;
+        flex: 1;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+      }
 
-        .jchm__months,
-        .jchm__body {
-          display: flex;
-          align-items: flex-start;
-          gap: 3px;
-          min-width: max-content;
+      /* 内层只负责横向滚动，避免与竖条互相挤占 */
+      &__scroll-x {
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding-bottom: 4px;
+      }
+
+      &__track {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: max-content;
+      }
+
+      &__period {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      &__months,
+      &__body {
+        display: flex;
+        align-items: flex-start;
+        gap: 3px;
+      }
+
+      &__months {
+        /* 裁掉月末文案溢出，避免撑出几乎无法滚动的横向条 */
+        overflow: hidden;
+
+        .jchm__months-spacer {
+          position: sticky;
+          left: 0;
+          z-index: 2;
+          width: var(--jchm-weekday-col, 18px);
+          flex: 0 0 var(--jchm-weekday-col, 18px);
+          background-color: var(--b3-menu-background);
         }
 
-        .jchm__months {
-          > :first-child {
-            width: var(--jchm-weekday-col, 18px);
-            flex: 0 0 var(--jchm-weekday-col, 18px);
-          }
+        .jchm__month {
+          width: 11px;
+          flex: 0 0 11px;
+          height: 18px;
+          line-height: 18px;
+          white-space: nowrap;
+          overflow: visible;
+          color: var(--b3-theme-on-surface-light);
+        }
+      }
 
-          .jchm__month {
-            width: 11px;
-            flex: 0 0 11px;
-            height: 18px;
-            line-height: 18px;
+      &__body {
+        align-items: stretch;
+
+        .jchm__weekdays {
+          position: sticky;
+          left: 0;
+          z-index: 2;
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          width: var(--jchm-weekday-col, 18px);
+          flex: 0 0 var(--jchm-weekday-col, 18px);
+          margin-right: 0;
+          background-color: var(--b3-menu-background);
+
+          .jchm__weekday {
+            width: 100%;
+            height: 11px;
+            line-height: 11px;
+            text-align: right;
             white-space: nowrap;
-            overflow: visible;
             color: var(--b3-theme-on-surface-light);
           }
         }
 
-        .jchm__body {
-          align-items: stretch;
+        .jchm__grid {
+          display: flex;
+          gap: 3px;
 
-          .jchm__weekdays {
+          .jchm__week {
             display: flex;
             flex-direction: column;
             gap: 3px;
-            width: var(--jchm-weekday-col, 18px);
-            flex: 0 0 var(--jchm-weekday-col, 18px);
-            margin-right: 0;
-
-            .jchm__weekday {
-              width: 100%;
-              height: 11px;
-              line-height: 11px;
-              text-align: right;
-              white-space: nowrap;
-              color: var(--b3-theme-on-surface-light);
-            }
-          }
-
-          .jchm__grid {
-            display: flex;
-            gap: 3px;
-
-            .jchm__week {
-              display: flex;
-              flex-direction: column;
-              gap: 3px;
-              width: 11px;
-            }
+            width: 11px;
           }
         }
       }
@@ -116,7 +175,10 @@
         }
       }
 
+      /* 在滚动区外，始终贴弹窗内容底部 */
       &__footer {
+        flex-shrink: 0;
+        margin-top: auto;
         display: flex;
         align-items: center;
         justify-content: space-between;
