@@ -1,44 +1,23 @@
 import {fetchSyncPost} from "siyuan";
+import type {I18n} from "./i18n";
 
 export type StatMode = "created" | "updated" | "mixed";
+export type WeekStart = "monday" | "sunday";
 
 export interface DayCount {
     date: string; // YYYYMMDD
     count: number;
 }
 
-export interface HeatMapI18n {
-    less: string;
-    more: string;
-    totalCount: string;
-    cellTooltip: string;
-    statMode: string;
-    statModeCreated: string;
-    statModeUpdated: string;
-    statModeMixed: string;
-}
-
 /** 容器块：文档 / 列表 / 列表项 / 引述 / 超级块 / 标注 */
 const CONTAINER_TYPES = "('d', 'l', 'i', 'b', 's', 'callout')";
 
-const LABELS_ZH = {
-    weekdays: ["日", "一", "二", "三", "四", "五", "六"],
-    months: ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"],
-};
-
-const LABELS_EN = {
-    weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-    months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
-};
-
-function getLocaleLabels() {
-    const lang = (window as any).siyuan?.config?.lang || "en";
-    return String(lang).toLowerCase().startsWith("zh") ? LABELS_ZH : LABELS_EN;
-}
-
 /** 查询近一年按日叶子块数量 */
-export async function queryYearActivity(mode: StatMode = "created"): Promise<DayCount[]> {
-    const startKey = getYearStartKey();
+export async function queryYearActivity(
+    mode: StatMode = "created",
+    weekStart: WeekStart = "monday",
+): Promise<DayCount[]> {
+    const startKey = getYearStartKey(weekStart);
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
     let sql: string;
 
@@ -78,12 +57,16 @@ ORDER BY date ASC`;
 }
 
 /** 渲染近一年 GitHub 风格热力图（仅图表区域） */
-export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement {
+export function renderHeatMap(
+    days: DayCount[],
+    i18n: I18n,
+    weekStart: WeekStart = "monday",
+): HTMLElement {
     const countMap = new Map(days.map((d) => [d.date, d.count]));
-    const {cells, weeks} = buildYearGrid(countMap);
+    const {cells, weeks} = buildYearGrid(countMap, weekStart);
     const levels = calcLevels(cells.map((c) => c.count));
     const total = cells.reduce((sum, c) => sum + c.count, 0);
-    const labels = getLocaleLabels();
+    const weekdayLabels = orderWeekdays(i18n.weekdays, weekStart);
 
     const root = document.createElement("div");
     root.className = "jchm";
@@ -94,7 +77,7 @@ export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement 
     const monthsRow = document.createElement("div");
     monthsRow.className = "jchm__months";
     monthsRow.appendChild(document.createElement("div")); // 对齐星期标签列
-    for (const label of buildMonthLabels(weeks, labels.months)) {
+    for (const label of buildMonthLabels(weeks, i18n.months)) {
         const el = document.createElement("div");
         el.className = "jchm__month";
         el.textContent = label;
@@ -107,14 +90,21 @@ export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement 
 
     const weekdays = document.createElement("div");
     weekdays.className = "jchm__weekdays";
-    labels.weekdays.forEach((label, index) => {
+    const visibleWeekdayLabels: string[] = [];
+    weekdayLabels.forEach((label, index) => {
         const el = document.createElement("div");
         el.className = "jchm__weekday";
         // 只显示一、三、五，避免拥挤
-        el.textContent = index % 2 === 1 ? label : "";
+        if (isSparseWeekday(index, weekStart)) {
+            el.textContent = label;
+            visibleWeekdayLabels.push(label);
+        }
         weekdays.appendChild(el);
     });
     body.appendChild(weekdays);
+
+    const weekdayColWidth = measureWeekdayColumnWidth(visibleWeekdayLabels);
+    root.style.setProperty("--jchm-weekday-col", `${weekdayColWidth}px`);
 
     const grid = document.createElement("div");
     grid.className = "jchm__grid";
@@ -168,38 +158,65 @@ export function renderHeatMap(days: DayCount[], i18n: HeatMapI18n): HTMLElement 
     return root;
 }
 
-/** 构建统计方式下拉菜单 */
-export function renderStatModeSelect(
-    i18n: HeatMapI18n,
-    mode: StatMode,
-    onChange: (mode: StatMode) => void,
+export interface HeatMapConfigOptions {
+    statMode: StatMode;
+    weekStart: WeekStart;
+}
+
+/** 构建配置区（统计方式、每周第一天） */
+export function renderConfig(
+    i18n: I18n,
+    config: HeatMapConfigOptions,
+    onChange: (patch: Partial<HeatMapConfigOptions>) => void,
+): HTMLElement {
+    const wrap = document.createElement("div");
+    wrap.className = "jchm__configs";
+
+    wrap.appendChild(renderSelectRow(i18n.statMode, [
+        {value: "created", text: i18n.statModeCreated},
+        {value: "updated", text: i18n.statModeUpdated},
+        {value: "mixed", text: i18n.statModeMixed},
+    ], config.statMode, (value) => {
+        onChange({statMode: value as StatMode});
+    }));
+
+    wrap.appendChild(renderSelectRow(i18n.weekStart, [
+        {value: "monday", text: i18n.weekStartMonday},
+        {value: "sunday", text: i18n.weekStartSunday},
+    ], config.weekStart, (value) => {
+        onChange({weekStart: value as WeekStart});
+    }));
+
+    return wrap;
+}
+
+function renderSelectRow(
+    labelText: string,
+    options: Array<{value: string; text: string}>,
+    current: string,
+    onChange: (value: string) => void,
 ): HTMLElement {
     const row = document.createElement("div");
     row.className = "jchm__config";
 
     const label = document.createElement("span");
     label.className = "jchm__config-label";
-    label.textContent = i18n.statMode;
+    label.textContent = labelText;
     row.appendChild(label);
 
     const select = document.createElement("select");
     select.className = "b3-select";
-    const options: Array<{value: StatMode; text: string}> = [
-        {value: "created", text: i18n.statModeCreated},
-        {value: "updated", text: i18n.statModeUpdated},
-        {value: "mixed", text: i18n.statModeMixed},
-    ];
     for (const opt of options) {
         const option = document.createElement("option");
         option.value = opt.value;
         option.textContent = opt.text;
-        if (opt.value === mode) {
+        if (opt.value === current) {
             option.selected = true;
         }
         select.appendChild(option);
     }
     select.addEventListener("change", () => {
-        onChange(select.value as StatMode);
+        onChange(select.value);
     });
     row.appendChild(select);
 
@@ -210,13 +227,64 @@ export function isStatMode(value: unknown): value is StatMode {
     return value === "created" || value === "updated" || value === "mixed";
 }
 
-function getYearStartKey(): string {
+export function isWeekStart(value: unknown): value is WeekStart {
+    return value === "monday" || value === "sunday";
+}
+
+/** 相对周起始日的偏移：周一制下周一为 0，周日制下周日为 0 */
+function getWeekOffset(date: Date, weekStart: WeekStart): number {
+    const day = date.getDay(); // 0 = 周日
+    if (weekStart === "monday") {
+        return (day + 6) % 7;
+    }
+    return day;
+}
+
+function alignToWeekStart(date: Date, weekStart: WeekStart): void {
+    date.setDate(date.getDate() - getWeekOffset(date, weekStart));
+}
+
+function orderWeekdays(weekdays: string[], weekStart: WeekStart): string[] {
+    if (weekStart === "monday") {
+        return [...weekdays.slice(1), weekdays[0]];
+    }
+    return weekdays;
+}
+
+/** 稀疏显示周一、周三、周五 */
+function isSparseWeekday(index: number, weekStart: WeekStart): boolean {
+    const dayOfWeek = weekStart === "monday" ? (index + 1) % 7 : index;
+    return dayOfWeek === 1 || dayOfWeek === 3 || dayOfWeek === 5;
+}
+
+/** 按实际显示的 weekday 文案测量列宽（取最长） */
+function measureWeekdayColumnWidth(labels: string[]): number {
+    const unique = [...new Set(labels.filter(Boolean))];
+    if (unique.length === 0) {
+        return 18;
+    }
+    const probe = document.createElement("div");
+    // 与 .jchm 字号对齐；探测节点挂在 body 上时拿不到嵌套选择器样式
+    probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;left:0;top:0;font-size:12px;";
+    const span = document.createElement("span");
+    span.style.whiteSpace = "nowrap";
+    probe.appendChild(span);
+    document.body.appendChild(probe);
+    let max = 0;
+    for (const label of unique) {
+        span.textContent = label;
+        max = Math.max(max, Math.ceil(span.getBoundingClientRect().width));
+    }
+    probe.remove();
+    return Math.max(max, 1);
+}
+
+function getYearStartKey(weekStart: WeekStart): string {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const start = new Date(today);
     start.setDate(start.getDate() - 364);
-    // 与热力图网格对齐到周日
-    start.setDate(start.getDate() - start.getDay());
+    alignToWeekStart(start, weekStart);
     return formatDateKey(start);
 }
 
@@ -225,14 +293,16 @@ interface GridCell {
     count: number;
 }
 
-function buildYearGrid(countMap: Map<string, number>): {cells: GridCell[]; weeks: GridCell[][]} {
+function buildYearGrid(
+    countMap: Map<string, number>,
+    weekStart: WeekStart,
+): {cells: GridCell[]; weeks: GridCell[][]} {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const start = new Date(today);
     start.setDate(start.getDate() - 364);
-    // 对齐到周日，与 GitHub 贡献图一致
-    start.setDate(start.getDate() - start.getDay());
+    alignToWeekStart(start, weekStart);
 
     const cells: GridCell[] = [];
     const weeks: GridCell[][] = [];

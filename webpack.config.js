@@ -19,7 +19,6 @@ module.exports = (env, argv) => {
                     {from: "icon.png", to: "./dist/"},
                     {from: "README*.md", to: "./dist/"},
                     {from: "plugin.json", to: "./dist/"},
-                    {from: "src/i18n/", to: "./dist/i18n/"},
                 ],
             }),
         );
@@ -31,14 +30,6 @@ module.exports = (env, argv) => {
                 pathMapper: (assetPath) => {
                     return assetPath.replace("dist/", "");
                 },
-            }),
-        );
-    } else {
-        plugins.push(
-            new CopyPlugin({
-                patterns: [
-                    {from: "src/i18n/", to: "./i18n/"},
-                ],
             }),
         );
     }
