@@ -1,3 +1,7 @@
+.jchm-dialog__container {
+  background-color: var(--b3-menu-background);
+}
+
 .jchm-dialog {
   padding-bottom: 8px;
 
@@ -132,26 +136,10 @@
         }
       }
     }
-
-    .jchm__configs {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px 16px;
-      padding-top: 4px;
-      border-top: 1px solid var(--b3-border-color);
-    }
-
-    .jchm__config {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      &-label {
-        flex: 0 0 auto;
-        color: var(--b3-theme-on-surface);
-        white-space: nowrap;
-      }
-    }
   }
+}
+
+/* 挂在 Dialog 标题栏，关闭按钮左侧 */
+.jchm-dialog__setting {
+  float: right;
 }

@@ -8,8 +8,8 @@ import {getI18n} from "./i18n";
 import {
     isStatMode,
     isWeekStart,
+    openConfigMenu,
     queryYearActivity,
-    renderConfig,
     renderHeatMap,
     type StatMode,
     type WeekStart,
@@ -107,12 +107,59 @@ export default class HeatMap extends Plugin {
             },
         });
 
+        this.dialog.element.querySelector(".b3-dialog__container")?.classList.add("jchm-dialog__container");
+
         const container = this.dialog.element.querySelector(".jchm-dialog") as HTMLElement;
         if (!container) {
             return;
         }
 
+        this.mountSettingsButton(this.dialog.element);
         await this.renderPanel(container);
+    }
+
+    private mountSettingsButton(dialogEl: HTMLElement) {
+        const header = dialogEl.querySelector(".b3-dialog__header") as HTMLElement | null;
+        if (!header || header.querySelector(".jchm-dialog__setting")) {
+            return;
+        }
+
+        const i18n = getI18n();
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "jchm-dialog__setting block__icon block__icon--show ariaLabel";
+        btn.setAttribute("data-position", "north");
+        btn.setAttribute("aria-label", i18n.settings);
+        btn.innerHTML = `<svg><use xlink:href="#iconSettings"></use></svg>`;
+        btn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.openSettingsMenu(btn.getBoundingClientRect());
+        });
+
+        const close = header.querySelector(".b3-dialog__close");
+        if (close) {
+            header.insertBefore(btn, close);
+        } else {
+            header.appendChild(btn);
+        }
+    }
+
+    private openSettingsMenu(rect: DOMRect) {
+        const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
+        openConfigMenu({
+            i18n: getI18n(),
+            config: this.config,
+            rect,
+            isMobile: this.isMobile,
+            onChange: (patch) => {
+                this.config = {...this.config, ...patch};
+                this.saveConfig();
+                if (chartHost) {
+                    this.refreshChart(chartHost);
+                }
+            },
+        });
     }
 
     private async renderPanel(container: HTMLElement) {
@@ -124,12 +171,6 @@ export default class HeatMap extends Plugin {
         chartHost.className = "jchm-panel__chart";
         chartHost.textContent = i18n.loading;
         panel.appendChild(chartHost);
-
-        panel.appendChild(renderConfig(i18n, this.config, (patch) => {
-            this.config = {...this.config, ...patch};
-            this.saveConfig();
-            this.refreshChart(chartHost);
-        }));
 
         container.replaceChildren(panel);
         await this.refreshChart(chartHost);

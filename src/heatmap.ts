@@ -1,4 +1,4 @@
-import {fetchSyncPost} from "siyuan";
+import {fetchSyncPost, Menu} from "siyuan";
 import type {I18n} from "./i18n";
 
 export type StatMode = "created" | "updated" | "mixed";
@@ -22,13 +22,14 @@ export async function queryYearActivity(
     let sql: string;
 
     if (mode === "updated") {
+        // 按最后更新时间：取 updated 的 YYYYMMDD，排除容器块，仅统计近一年
         sql = `SELECT SUBSTR(updated, 1, 8) AS date, COUNT(*) AS count
 FROM blocks
 WHERE ${leafFilter} AND updated >= '${startKey}' AND updated != ''
 GROUP BY SUBSTR(updated, 1, 8)
 ORDER BY date ASC`;
     } else if (mode === "mixed") {
-        // UNION 按 (date, id) 去重：同日既创建又更新只计 1；跨日则两天各计 1
+        // 混合：创建日 ∪ 最后更新日；UNION 按 (date, id) 去重（同日计 1，跨日各计 1）
         sql = `SELECT date, COUNT(*) AS count FROM (
   SELECT SUBSTR(created, 1, 8) AS date, id FROM blocks
   WHERE ${leafFilter} AND created >= '${startKey}'
@@ -38,6 +39,7 @@ ORDER BY date ASC`;
 ) GROUP BY date
 ORDER BY date ASC`;
     } else {
+        // 按创建时间：取 created 的 YYYYMMDD，排除容器块，仅统计近一年
         sql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count
 FROM blocks
 WHERE ${leafFilter} AND created >= '${startKey}'
@@ -155,6 +157,12 @@ export function renderHeatMap(
     footer.appendChild(legend);
 
     root.appendChild(footer);
+
+    // 窗口不够宽时横向滚动，默认滚到最右侧以展示最近日期
+    requestAnimationFrame(() => {
+        scroll.scrollLeft = scroll.scrollWidth;
+    });
+
     return root;
 }
 
@@ -163,64 +171,101 @@ export interface HeatMapConfigOptions {
     weekStart: WeekStart;
 }
 
-/** 构建配置区（统计方式、每周第一天） */
-export function renderConfig(
-    i18n: I18n,
-    config: HeatMapConfigOptions,
-    onChange: (patch: Partial<HeatMapConfigOptions>) => void,
-): HTMLElement {
-    const wrap = document.createElement("div");
-    wrap.className = "jchm__configs";
-
-    wrap.appendChild(renderSelectRow(i18n.statMode, [
-        {value: "created", text: i18n.statModeCreated},
-        {value: "updated", text: i18n.statModeUpdated},
-        {value: "mixed", text: i18n.statModeMixed},
-    ], config.statMode, (value) => {
-        onChange({statMode: value as StatMode});
-    }));
-
-    wrap.appendChild(renderSelectRow(i18n.weekStart, [
-        {value: "monday", text: i18n.weekStartMonday},
-        {value: "sunday", text: i18n.weekStartSunday},
-    ], config.weekStart, (value) => {
-        onChange({weekStart: value as WeekStart});
-    }));
-
-    return wrap;
+export interface OpenConfigMenuOptions {
+    i18n: I18n;
+    config: HeatMapConfigOptions;
+    rect: DOMRect;
+    isMobile: boolean;
+    onChange: (patch: Partial<HeatMapConfigOptions>) => void;
 }
 
-function renderSelectRow(
-    labelText: string,
-    options: Array<{value: string; text: string}>,
-    current: string,
-    onChange: (value: string) => void,
-): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "jchm__config";
+/** 弹出配置菜单（统计方式、每周第一天） */
+export function openConfigMenu(options: OpenConfigMenuOptions): void {
+    const {i18n, config, rect, isMobile, onChange} = options;
+    const menu = new Menu("heatmap-config");
 
-    const label = document.createElement("span");
-    label.className = "jchm__config-label";
-    label.textContent = labelText;
-    row.appendChild(label);
-
-    const select = document.createElement("select");
-    select.className = "b3-select";
-    for (const opt of options) {
-        const option = document.createElement("option");
-        option.value = opt.value;
-        option.textContent = opt.text;
-        if (opt.value === current) {
-            option.selected = true;
-        }
-        select.appendChild(option);
-    }
-    select.addEventListener("change", () => {
-        onChange(select.value);
+    menu.addItem({
+        id: "heatmap-stat-mode",
+        label: i18n.statMode,
+        iconHTML: "",
+        type: "submenu",
+        submenu: [
+            {
+                id: "heatmap-stat-created",
+                label: i18n.statModeCreated,
+                iconHTML: "",
+                checked: config.statMode === "created",
+                click: () => {
+                    if (config.statMode !== "created") {
+                        onChange({statMode: "created"});
+                    }
+                },
+            },
+            {
+                id: "heatmap-stat-updated",
+                label: i18n.statModeUpdated,
+                iconHTML: "",
+                checked: config.statMode === "updated",
+                click: () => {
+                    if (config.statMode !== "updated") {
+                        onChange({statMode: "updated"});
+                    }
+                },
+            },
+            {
+                id: "heatmap-stat-mixed",
+                label: i18n.statModeMixed,
+                iconHTML: "",
+                checked: config.statMode === "mixed",
+                click: () => {
+                    if (config.statMode !== "mixed") {
+                        onChange({statMode: "mixed"});
+                    }
+                },
+            },
+        ],
     });
-    row.appendChild(select);
 
-    return row;
+    menu.addItem({
+        id: "heatmap-week-start",
+        label: i18n.weekStart,
+        iconHTML: "",
+        type: "submenu",
+        submenu: [
+            {
+                id: "heatmap-week-monday",
+                label: i18n.weekStartMonday,
+                iconHTML: "",
+                checked: config.weekStart === "monday",
+                click: () => {
+                    if (config.weekStart !== "monday") {
+                        onChange({weekStart: "monday"});
+                    }
+                },
+            },
+            {
+                id: "heatmap-week-sunday",
+                label: i18n.weekStartSunday,
+                iconHTML: "",
+                checked: config.weekStart === "sunday",
+                click: () => {
+                    if (config.weekStart !== "sunday") {
+                        onChange({weekStart: "sunday"});
+                    }
+                },
+            },
+        ],
+    });
+
+    if (isMobile) {
+        menu.fullscreen();
+    } else {
+        menu.open({
+            x: rect.right,
+            y: rect.bottom,
+            isLeft: true,
+        });
+    }
 }
 
 export function isStatMode(value: unknown): value is StatMode {
