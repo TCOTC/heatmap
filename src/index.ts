@@ -6,7 +6,10 @@ import {
     Plugin,
     showMessage,
 } from "siyuan";
-import {getI18n} from "./i18n";
+import {
+    getDefaultWeekStart,
+    getI18n,
+} from "./i18n";
 import {
     buildYearOptions,
     applyHeatColor,
@@ -59,7 +62,7 @@ export default class HeatMap extends Plugin {
     private dialog?: Dialog;
     private config: PluginConfig = {
         statMode: "created",
-        weekStart: "monday",
+        weekStart: getDefaultWeekStart(),
         displayMode: "recent",
         fromYear: null,
         yearOrder: "newestFirst",
@@ -147,7 +150,7 @@ export default class HeatMap extends Plugin {
         }
         return {
             statMode: isStatMode(raw.statMode) ? raw.statMode : "created",
-            weekStart: isWeekStart(raw.weekStart) ? raw.weekStart : "monday",
+            weekStart: isWeekStart(raw.weekStart) ? raw.weekStart : getDefaultWeekStart(),
             displayMode,
             fromYear: displayMode === "years" ? fromYear : null,
             yearOrder: isYearOrder(raw.yearOrder) ? raw.yearOrder : "newestFirst",

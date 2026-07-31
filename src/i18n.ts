@@ -1,3 +1,5 @@
+import type {WeekStart} from "./types";
+
 const ZH = {
     openHeatMap: "文档热力统计",
     heatmapTitle: "文档热力统计",
@@ -96,8 +98,18 @@ const EN: I18n = {
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
 };
 
+/** 思源界面是否为中文 */
+export function isZhLang(): boolean {
+    const lang = (window as any).siyuan?.config?.lang || "en";
+    return String(lang).toLowerCase().startsWith("zh");
+}
+
 /** 按思源语言配置返回文案，非中文回退英文 */
 export function getI18n(): I18n {
-    const lang = (window as any).siyuan?.config?.lang || "en";
-    return String(lang).toLowerCase().startsWith("zh") ? ZH : EN;
+    return isZhLang() ? ZH : EN;
+}
+
+/** 每周第一天默认值：中文周一，英文周日 */
+export function getDefaultWeekStart(): WeekStart {
+    return isZhLang() ? "monday" : "sunday";
 }

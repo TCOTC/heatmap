@@ -3,7 +3,10 @@ import {
     describe,
     it,
 } from "node:test";
-import {getI18n} from "./i18n";
+import {
+    getDefaultWeekStart,
+    getI18n,
+} from "./i18n";
 
 function withLang(lang: string | undefined, run: () => void): void {
     const g = globalThis as any;
@@ -50,6 +53,26 @@ describe("getI18n", () => {
     it("缺失语言配置时回退英文", () => {
         withLang(undefined, () => {
             assert.equal(getI18n().loading, "Loading…");
+        });
+    });
+});
+
+describe("getDefaultWeekStart", () => {
+    it("中文默认周一", () => {
+        withLang("zh_CN", () => {
+            assert.equal(getDefaultWeekStart(), "monday");
+        });
+    });
+
+    it("英文默认周日", () => {
+        withLang("en_US", () => {
+            assert.equal(getDefaultWeekStart(), "sunday");
+        });
+    });
+
+    it("缺失语言配置时默认周日", () => {
+        withLang(undefined, () => {
+            assert.equal(getDefaultWeekStart(), "sunday");
         });
     });
 });

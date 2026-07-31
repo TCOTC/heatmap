@@ -1,5 +1,6 @@
 import {fetchSyncPost} from "siyuan";
 import {alignToWeekStart, formatDateKey} from "./date";
+import {getDefaultWeekStart} from "./i18n";
 import type {DayCount, DayDoc, DayDocsResult, HeatMapConfigOptions, StatMode} from "./types";
 
 /** 容器块：文档 / 列表 / 列表项 / 引述 / 超级块 / 标注 */
@@ -53,7 +54,7 @@ export async function queryActivity(
     config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear" | "weekStart" | "viewMode" | "includedBoxIds"> = {
         displayMode: "recent",
         fromYear: null,
-        weekStart: "monday",
+        weekStart: getDefaultWeekStart(),
         viewMode: "heatmap",
         includedBoxIds: null,
     },
