@@ -374,11 +374,24 @@
         }
       }
 
-      /* 传统日历：auto-fit 换列，1fr 吃余宽；max() 限制最多 6 列 */
+      /* 传统日历：固定 2/3/6/12 列（容器查询），避免 auto-fit 折叠空列导致末行月块被拉宽 */
       &--calendar {
+        flex: 1 1 auto;
+        box-sizing: border-box;
+        /*
+         * 与热力图同理：固有宽建在日历根上（含左右 padding），
+         * container-type 只建在已定宽的 scroll 上，避免 inline-size 遏制压扁弹窗。
+         * 1004 = 6×154 + 5×16（满行 6 列）
+         */
+        width: calc(1004px + 2 * var(--jchm-pad-x, 24px));
+        max-width: 100%;
+        min-width: 0;
+
         .jchm__scroll {
           overflow-x: hidden;
           overflow-y: auto;
+          container-type: inline-size;
+          container-name: jchm-cal;
         }
 
         .jchm__cal-track {
@@ -387,14 +400,6 @@
           gap: 16px;
           width: 100%;
           min-width: 0;
-          /* 给 max-content 弹窗一个满行 6 列的固有宽度，窄于父级时再收缩 */
-          &::before {
-            content: "";
-            display: block;
-            width: 1004px;
-            max-width: 100%;
-            height: 0;
-          }
         }
 
         .jchm__cal-year {
@@ -412,11 +417,30 @@
 
         .jchm__cal-months {
           display: grid;
-          /* 列宽 ≥154px；够宽时按 (100% - 5*16px)/6 抬高下限，从而最多 6 列并撑满 */
-          grid-template-columns: repeat(auto-fit, minmax(max(154px, calc((100% - 80px) / 6)), 1fr));
           gap: 12px 16px;
           width: 100%;
           min-width: 0;
+          /* 默认 2 列；更宽时见下方 @container */
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        /* 阈值按 scroll 内容区宽度（已扣除 padding）；≈ n×154px + (n-1)×16px */
+        @container jchm-cal (min-width: 494px) {
+          .jchm__cal-months {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+        }
+
+        @container jchm-cal (min-width: 1004px) {
+          .jchm__cal-months {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+          }
+        }
+
+        @container jchm-cal (min-width: 2024px) {
+          .jchm__cal-months {
+            grid-template-columns: repeat(12, minmax(0, 1fr));
+          }
         }
 
         .jchm__cal-month {
