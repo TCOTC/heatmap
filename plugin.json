@@ -24,12 +24,12 @@
   ],
   "disabledInPublish": false,
   "displayName": {
-    "default": "Heat Map",
-    "zh-CN": "热力图"
+    "default": "Document Heat Stats",
+    "zh-CN": "文档热力统计"
   },
   "description": {
-    "default": "Visually display the distribution of notes throughout the year, similar to GitHub's heat map.",
-    "zh-CN": "直观展示全年笔记分布，类似于 GitHub 热力图"
+    "default": "Visually display the distribution of notes throughout the year, with heatmap and calendar layouts.",
+    "zh-CN": "直观展示全年笔记分布，支持热力图与日历两种形式"
   },
   "readme": {
     "default": "README.md",
