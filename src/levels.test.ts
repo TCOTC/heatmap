@@ -14,6 +14,7 @@ const i18n = {
     legendTooltipExact: "${count} 个块",
     legendTooltipRange: "${min}–${max} 个块",
     legendTooltipMore: "${min}+ 个块",
+    legendTooltipUnused: "未使用",
 } as I18n;
 
 describe("calcLevels", () => {
@@ -83,6 +84,14 @@ describe("formatLegendTooltip", () => {
     it("区间塌缩为单点时退化为精确数量说明", () => {
         // t1 === 1 时 1 级区间为 [1, 1]
         assert.equal(formatLegendTooltip(1, [1, 4, 8], i18n), "1 个块");
+    });
+
+    it("分位重合导致空档时标为未使用，不捏造区间", () => {
+        // t1 === t2 === 5 时 2 级区间为 [6, 5]
+        assert.equal(formatLegendTooltip(2, [5, 5, 5], i18n), "未使用");
+        assert.equal(formatLegendTooltip(3, [5, 5, 5], i18n), "未使用");
+        assert.equal(formatLegendTooltip(1, [5, 5, 5], i18n), "1–5 个块");
+        assert.equal(formatLegendTooltip(4, [5, 5, 5], i18n), "6+ 个块");
     });
 
     it("全零阈值时更高档回退为 1+", () => {

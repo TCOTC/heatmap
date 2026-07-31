@@ -53,6 +53,7 @@ export function openScopeDialog(options: OpenScopeDialogOptions): void {
     }
 
     body.appendChild(createLoadingEl(i18n));
+    confirmBtn.disabled = true;
 
     const finishCancel = () => {
         if (handled) {
@@ -72,6 +73,7 @@ export function openScopeDialog(options: OpenScopeDialogOptions): void {
             return;
         }
         body.replaceChildren();
+        confirmBtn.disabled = false;
         if (notebooks.length === 0) {
             const empty = document.createElement("div");
             empty.className = "jchm-scope__empty";

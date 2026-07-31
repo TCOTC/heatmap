@@ -65,6 +65,8 @@ export default class HeatMap extends Plugin {
         color: null,
     };
     private refreshing = false;
+    /** 刷新进行中又收到配置变更时，结束后再刷一次最新配置 */
+    private refreshQueued = false;
     private loadingDay = false;
     private view: "heatmap" | "day" = "heatmap";
     /** 进入日详情前暂存热力图面板，返回时直接还原，避免重复 SQL */
@@ -75,9 +77,13 @@ export default class HeatMap extends Plugin {
     private dayAbort?: AbortController;
     /** 热力图刷新请求 */
     private chartAbort?: AbortController;
+    /** 配置从磁盘加载完成（点击顶栏时等待） */
+    private configReady: Promise<void> = Promise.resolve();
+    /** 串行化 saveData，避免并发写回旧配置 */
+    private saveChain: Promise<void> = Promise.resolve();
 
     onload() {
-        this.loadData(STORAGE_NAME).then((data) => {
+        this.configReady = this.loadData(STORAGE_NAME).then((data) => {
             this.config = this.normalizeConfig(data);
         }).catch(e => {
             const errorMessage = `${this.displayName}: failed to load data [${STORAGE_NAME}]: ${e.msg}`;
@@ -123,16 +129,7 @@ export default class HeatMap extends Plugin {
 
     private normalizeConfig(data: unknown): PluginConfig {
         const raw = (data && typeof data === "object") ? data as Record<string, unknown> : {};
-        let fromYear = normalizeFromYear(raw.fromYear);
-        // 兼容旧版 selectedYears：取其中最早年作为起点
-        if (fromYear == null && Array.isArray(raw.selectedYears)) {
-            const legacy = raw.selectedYears
-                .map((y) => Number(y))
-                .filter((y) => Number.isInteger(y) && y >= 1970 && y <= 2100);
-            if (legacy.length > 0) {
-                fromYear = Math.min(...legacy);
-            }
-        }
+        const fromYear = normalizeFromYear(raw.fromYear);
         let displayMode: DisplayMode = isDisplayMode(raw.displayMode) ? raw.displayMode : "recent";
         if (displayMode === "years" && fromYear == null) {
             displayMode = "recent";
@@ -149,12 +146,14 @@ export default class HeatMap extends Plugin {
         };
     }
 
-    private async saveConfig() {
-        try {
-            await this.saveData(STORAGE_NAME, this.config);
-        } catch (e) {
-            console.error(this.displayName, "save config failed", e);
-        }
+    private saveConfig() {
+        this.saveChain = this.saveChain.catch((): void => undefined).then(async (): Promise<void> => {
+            try {
+                await this.saveData(STORAGE_NAME, this.config);
+            } catch (e) {
+                console.error(this.displayName, "save config failed", e);
+            }
+        });
     }
 
     private abortAllLoads() {
@@ -203,6 +202,12 @@ export default class HeatMap extends Plugin {
     }
 
     private async openHeatMap() {
+        if (this.dialog || this.openAbort) {
+            return;
+        }
+
+        await this.configReady;
+        // 等待配置期间可能已打开或正在打开
         if (this.dialog || this.openAbort) {
             return;
         }
@@ -286,6 +291,7 @@ export default class HeatMap extends Plugin {
                 this.view = "heatmap";
                 this.cachedHeatmapPanel = null;
                 this.refreshing = false;
+                this.refreshQueued = false;
                 this.loadingDay = false;
             },
         });
@@ -386,7 +392,7 @@ export default class HeatMap extends Plugin {
 
         openConfigMenu({
             i18n,
-            config: this.config,
+            getConfig: () => this.config,
             yearOptions,
             rect,
             isMobile: this.isMobile,
@@ -483,47 +489,61 @@ export default class HeatMap extends Plugin {
 
     private async refreshChart(chartHost: HTMLElement) {
         if (this.refreshing) {
+            this.refreshQueued = true;
+            this.chartAbort?.abort();
             return;
         }
         this.refreshing = true;
-        this.chartAbort?.abort();
-        this.chartAbort = new AbortController();
-        const {signal} = this.chartAbort;
-        const i18n = getI18n();
-        const hasChart = Boolean(chartHost.querySelector(".jchm"));
+        this.refreshQueued = false;
 
         try {
-            const days = await this.awaitWithLoadingDelay(
-                queryActivity(this.config.statMode, this.config, signal),
-                () => {
-                    // 已有图表时保留旧内容；仅空壳时才上 Loading
-                    if (!hasChart && !signal.aborted) {
-                        chartHost.replaceChildren(this.createLoadingEl());
+            do {
+                this.refreshQueued = false;
+                this.chartAbort?.abort();
+                this.chartAbort = new AbortController();
+                const {signal} = this.chartAbort;
+                const i18n = getI18n();
+                const hasChart = Boolean(chartHost.querySelector(".jchm"));
+
+                try {
+                    const days = await this.awaitWithLoadingDelay(
+                        queryActivity(this.config.statMode, this.config, signal),
+                        () => {
+                            // 已有图表时保留旧内容；仅空壳时才上 Loading
+                            if (!hasChart && !signal.aborted) {
+                                chartHost.replaceChildren(this.createLoadingEl());
+                            }
+                        },
+                        signal,
+                    );
+                    if (signal.aborted || !this.dialog || this.view !== "heatmap") {
+                        continue;
                     }
-                },
-                signal,
-            );
-            if (signal.aborted || !this.dialog || this.view !== "heatmap") {
-                return;
-            }
-            chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
-                this.openDayDetail(dateKey);
-            }));
-        } catch (e) {
-            if (this.isAbortError(e) || signal.aborted) {
-                return;
-            }
-            console.error(this.displayName, e);
-            if (!this.dialog || this.view !== "heatmap") {
-                return;
-            }
-            chartHost.textContent = i18n.loadFailed;
-            showMessage(`${this.displayName}: ${i18n.loadFailed}`);
+                    chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
+                        this.openDayDetail(dateKey);
+                    }));
+                } catch (e) {
+                    if (this.isAbortError(e) || signal.aborted) {
+                        continue;
+                    }
+                    console.error(this.displayName, e);
+                    if (!this.dialog || this.view !== "heatmap") {
+                        continue;
+                    }
+                    chartHost.textContent = i18n.loadFailed;
+                    showMessage(`${this.displayName}: ${i18n.loadFailed}`);
+                } finally {
+                    if (this.chartAbort?.signal === signal) {
+                        this.chartAbort = undefined;
+                    }
+                }
+            } while (this.refreshQueued && this.dialog && this.view === "heatmap");
         } finally {
-            if (this.chartAbort?.signal === signal) {
-                this.chartAbort = undefined;
-            }
             this.refreshing = false;
+            // 循环退出后若又有排队（极端时序），再启一轮
+            if (this.refreshQueued && this.dialog && this.view === "heatmap") {
+                void this.refreshChart(chartHost);
+            }
         }
     }
 

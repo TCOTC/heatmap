@@ -55,13 +55,14 @@ export function formatLegendTooltip(level: number, thresholds: LevelThresholds, 
     if (max === null) {
         return i18n.legendTooltipMore.replace("${min}", String(min));
     }
-    // 分位重合导致该等级区间为空时，退化为单点说明
-    const lo = Math.min(min, max);
-    const hi = Math.max(min, max);
-    if (lo === hi) {
-        return i18n.legendTooltipExact.replace("${count}", String(lo));
+    // 分位重合导致该等级区间为空（min > max）时，不捏造区间
+    if (min > max) {
+        return i18n.legendTooltipUnused;
+    }
+    if (min === max) {
+        return i18n.legendTooltipExact.replace("${count}", String(min));
     }
     return i18n.legendTooltipRange
-        .replace("${min}", String(lo))
-        .replace("${max}", String(hi));
+        .replace("${min}", String(min))
+        .replace("${max}", String(max));
 }

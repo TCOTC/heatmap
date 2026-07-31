@@ -48,7 +48,8 @@ export function expandYearRange(fromYear: number, toYear: number): number[] {
 
 export interface OpenConfigMenuOptions {
     i18n: I18n;
-    config: HeatMapConfigOptions;
+    /** 读取当前配置（每次点击时取最新，避免菜单闭包快照过期） */
+    getConfig: () => HeatMapConfigOptions;
     /** 设置菜单中展示的年份选项（由 buildYearOptions 生成） */
     yearOptions: number[];
     rect: DOMRect;
@@ -62,7 +63,8 @@ export interface OpenConfigMenuOptions {
 
 /** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、颜色） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
-    const {i18n, config, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor} = options;
+    const {i18n, getConfig, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor} = options;
+    const config = getConfig();
     const menu = new Menu("heatmap-config");
 
     menu.addItem({
@@ -77,7 +79,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.viewMode === "heatmap",
                 click: () => {
-                    if (config.viewMode !== "heatmap") {
+                    if (getConfig().viewMode !== "heatmap") {
                         onChange({viewMode: "heatmap"});
                     }
                 },
@@ -88,7 +90,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.viewMode === "calendar",
                 click: () => {
-                    if (config.viewMode !== "calendar") {
+                    if (getConfig().viewMode !== "calendar") {
                         onChange({viewMode: "calendar"});
                     }
                 },
@@ -108,7 +110,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.statMode === "created",
                 click: () => {
-                    if (config.statMode !== "created") {
+                    if (getConfig().statMode !== "created") {
                         onChange({statMode: "created"});
                     }
                 },
@@ -119,7 +121,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.statMode === "updated",
                 click: () => {
-                    if (config.statMode !== "updated") {
+                    if (getConfig().statMode !== "updated") {
                         onChange({statMode: "updated"});
                     }
                 },
@@ -130,7 +132,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.statMode === "mixed",
                 click: () => {
-                    if (config.statMode !== "mixed") {
+                    if (getConfig().statMode !== "mixed") {
                         onChange({statMode: "mixed"});
                     }
                 },
@@ -145,7 +147,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
             iconHTML: "",
             checked: config.displayMode === "recent",
             click: () => {
-                if (config.displayMode !== "recent") {
+                if (getConfig().displayMode !== "recent") {
                     onChange({displayMode: "recent", fromYear: null});
                 }
             },
@@ -159,7 +161,8 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
             iconHTML: "",
             checked: selected,
             click: () => {
-                if (config.displayMode !== "years" || config.fromYear !== year) {
+                const current = getConfig();
+                if (current.displayMode !== "years" || current.fromYear !== year) {
                     onChange({displayMode: "years", fromYear: year});
                 }
             },
@@ -186,7 +189,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.yearOrder === "newestFirst",
                 click: () => {
-                    if (config.yearOrder !== "newestFirst") {
+                    if (getConfig().yearOrder !== "newestFirst") {
                         onChange({yearOrder: "newestFirst"});
                     }
                 },
@@ -197,7 +200,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.yearOrder === "oldestFirst",
                 click: () => {
-                    if (config.yearOrder !== "oldestFirst") {
+                    if (getConfig().yearOrder !== "oldestFirst") {
                         onChange({yearOrder: "oldestFirst"});
                     }
                 },
@@ -217,7 +220,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.weekStart === "monday",
                 click: () => {
-                    if (config.weekStart !== "monday") {
+                    if (getConfig().weekStart !== "monday") {
                         onChange({weekStart: "monday"});
                     }
                 },
@@ -228,7 +231,7 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 iconHTML: "",
                 checked: config.weekStart === "sunday",
                 click: () => {
-                    if (config.weekStart !== "sunday") {
+                    if (getConfig().weekStart !== "sunday") {
                         onChange({weekStart: "sunday"});
                     }
                 },
