@@ -12,6 +12,7 @@ import {
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
+    normalizeIncludedBoxIds,
 } from "./config";
 
 describe("expandYearRange", () => {
@@ -92,5 +93,25 @@ describe("normalizeFromYear", () => {
         assert.equal(normalizeFromYear(null), null);
         assert.equal(normalizeFromYear(undefined), null);
         assert.equal(normalizeFromYear(""), null);
+    });
+});
+
+describe("normalizeIncludedBoxIds", () => {
+    it("null / 缺省 / 非数组回退为不限制", () => {
+        assert.equal(normalizeIncludedBoxIds(null), null);
+        assert.equal(normalizeIncludedBoxIds(undefined), null);
+        assert.equal(normalizeIncludedBoxIds("box"), null);
+        assert.equal(normalizeIncludedBoxIds(1), null);
+    });
+
+    it("保留空数组（表示不统计任何笔记本）", () => {
+        assert.deepEqual(normalizeIncludedBoxIds([]), []);
+    });
+
+    it("去重并丢弃非法项", () => {
+        assert.deepEqual(
+            normalizeIncludedBoxIds(["a", "  ", "b", "a", 1, null, " c "]),
+            ["a", "b", "c"],
+        );
     });
 });

@@ -13,6 +13,19 @@ const state = {
 
 const siyuanStub = {
     fetchSyncPost: (...args) => state.fetchSyncPost(...args),
+    Dialog: class Dialog {
+        element = {
+            querySelector() {
+                return null;
+            },
+            querySelectorAll() {
+                return [];
+            },
+        };
+        constructor() {}
+        destroy() {}
+        bindInput() {}
+    },
     Menu: class Menu {
         addItem() {}
         open() {}

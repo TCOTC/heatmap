@@ -36,4 +36,19 @@ export interface HeatMapConfigOptions {
     fromYear: number | null;
     yearOrder: YearOrder;
     viewMode: ViewMode;
+    /**
+     * 统计范围（笔记本白名单）：
+     * - null：不限制（全部笔记本，含日后新建）
+     * - string[]：仅统计这些 boxId；空数组表示不统计任何笔记本
+     */
+    includedBoxIds: string[] | null;
+}
+
+/** 统计范围 Dialog 中展示的笔记本条目 */
+export interface ScopeNotebook {
+    id: string;
+    name: string;
+    icon: string;
+    closed: boolean;
+    encrypted: boolean;
 }

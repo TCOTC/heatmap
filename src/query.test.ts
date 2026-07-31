@@ -5,6 +5,7 @@ import {
     it,
 } from "node:test";
 import {
+    buildBoxFilter,
     queryActivity,
     queryDayDocs,
     queryEarliestYear,
@@ -114,6 +115,7 @@ describe("queryActivity", () => {
             fromYear: null,
             weekStart: "monday",
             viewMode: "heatmap",
+            includedBoxIds: null,
         });
         assert.deepEqual(rows, [
             {date: "20240101", count: 12},
@@ -133,10 +135,47 @@ describe("queryActivity", () => {
             fromYear: 2024,
             weekStart: "monday",
             viewMode: "heatmap",
+            includedBoxIds: null,
         });
 
         assert.ok(stmt.includes("20240101000000"));
         const currentYear = new Date().getFullYear();
         assert.ok(stmt.includes(`${currentYear + 1}0101000000`));
+    });
+
+    it("白名单笔记本时 SQL 含 box IN", async () => {
+        let stmt = "";
+        stub().fetchSyncPost = async (_url, data) => {
+            stmt = data.stmt;
+            return {code: 0, msg: "", data: []};
+        };
+
+        await queryActivity("created", {
+            displayMode: "recent",
+            fromYear: null,
+            weekStart: "monday",
+            viewMode: "heatmap",
+            includedBoxIds: ["box-a", "box-b"],
+        });
+
+        assert.ok(stmt.includes("box IN ('box-a', 'box-b')"));
+    });
+});
+
+describe("buildBoxFilter", () => {
+    it("null 不限制", () => {
+        assert.equal(buildBoxFilter(null), "");
+        assert.equal(buildBoxFilter(undefined), "");
+    });
+
+    it("空列表禁止命中", () => {
+        assert.equal(buildBoxFilter([]), " AND 0");
+    });
+
+    it("转义单引号并去重", () => {
+        assert.equal(
+            buildBoxFilter(["a'b", "a'b", " c "]),
+            " AND box IN ('a''b', 'c')",
+        );
     });
 });

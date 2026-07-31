@@ -14,7 +14,9 @@ import {
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
+    normalizeIncludedBoxIds,
     openConfigMenu,
+    openScopeDialog,
     queryActivity,
     queryDayDocs,
     queryEarliestYear,
@@ -42,6 +44,7 @@ interface PluginConfig {
     fromYear: number | null;
     yearOrder: YearOrder;
     viewMode: ViewMode;
+    includedBoxIds: string[] | null;
 }
 
 export default class HeatMap extends Plugin {
@@ -54,6 +57,7 @@ export default class HeatMap extends Plugin {
         fromYear: null,
         yearOrder: "newestFirst",
         viewMode: "heatmap",
+        includedBoxIds: null,
     };
     private refreshing = false;
     private loadingDay = false;
@@ -135,6 +139,7 @@ export default class HeatMap extends Plugin {
             fromYear: displayMode === "years" ? fromYear : null,
             yearOrder: isYearOrder(raw.yearOrder) ? raw.yearOrder : "newestFirst",
             viewMode: isViewMode(raw.viewMode) ? raw.viewMode : "heatmap",
+            includedBoxIds: normalizeIncludedBoxIds(raw.includedBoxIds),
         };
     }
 
@@ -334,26 +339,53 @@ export default class HeatMap extends Plugin {
         const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
         let earliest: number | null = null;
         try {
-            earliest = await queryEarliestYear(this.config.statMode);
+            earliest = await queryEarliestYear(this.config.statMode, {
+                includedBoxIds: this.config.includedBoxIds,
+            });
         } catch (e) {
             console.error(this.displayName, "query earliest year failed", e);
         }
         const yearOptions = buildYearOptions(earliest, this.config.fromYear);
+        const i18n = getI18n();
+
+        const applyConfigPatch = (patch: Partial<PluginConfig>) => {
+            this.config = {...this.config, ...patch};
+            this.saveConfig();
+            // 配置变了，缓存的热力图作废；若仍在热力图页则立刻刷新
+            this.cachedHeatmapPanel = null;
+            if (chartHost && this.view === "heatmap") {
+                this.refreshChart(chartHost);
+            }
+        };
 
         openConfigMenu({
-            i18n: getI18n(),
+            i18n,
             config: this.config,
             yearOptions,
             rect,
             isMobile: this.isMobile,
             onChange: (patch) => {
-                this.config = {...this.config, ...patch};
-                this.saveConfig();
-                // 配置变了，缓存的热力图作废；若仍在热力图页则立刻刷新
-                this.cachedHeatmapPanel = null;
-                if (chartHost && this.view === "heatmap") {
-                    this.refreshChart(chartHost);
-                }
+                applyConfigPatch(patch);
+            },
+            onOpenScope: () => {
+                openScopeDialog({
+                    i18n,
+                    includedBoxIds: this.config.includedBoxIds,
+                    isMobile: this.isMobile,
+                    onConfirm: (includedBoxIds) => {
+                        const prev = this.config.includedBoxIds;
+                        const same = (prev == null && includedBoxIds == null)
+                            || (
+                                Array.isArray(prev)
+                                && Array.isArray(includedBoxIds)
+                                && prev.length === includedBoxIds.length
+                                && prev.every((id, i) => id === includedBoxIds[i])
+                            );
+                        if (!same) {
+                            applyConfigPatch({includedBoxIds});
+                        }
+                    },
+                });
             },
         });
     }
@@ -519,7 +551,12 @@ export default class HeatMap extends Plugin {
 
         try {
             const docs = await this.awaitWithLoadingDelay(
-                queryDayDocs(dateKey, this.config.statMode, signal),
+                queryDayDocs(
+                    dateKey,
+                    this.config.statMode,
+                    {includedBoxIds: this.config.includedBoxIds},
+                    signal,
+                ),
                 showDayLoading,
                 signal,
             );

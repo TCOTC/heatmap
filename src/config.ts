@@ -54,11 +54,13 @@ export interface OpenConfigMenuOptions {
     rect: DOMRect;
     isMobile: boolean;
     onChange: (patch: Partial<HeatMapConfigOptions>) => void;
+    /** 打开「统计范围」笔记本勾选 Dialog */
+    onOpenScope: () => void;
 }
 
-/** 弹出配置菜单（统计方式、显示范围、年份排序、每周第一天、展示形式） */
+/** 弹出配置菜单（统计方式、显示范围、年份排序、每周第一天、展示形式、统计范围） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
-    const {i18n, config, yearOptions, rect, isMobile, onChange} = options;
+    const {i18n, config, yearOptions, rect, isMobile, onChange, onOpenScope} = options;
     const menu = new Menu("heatmap-config");
 
     menu.addItem({
@@ -232,6 +234,15 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
         ],
     });
 
+    menu.addItem({
+        id: "heatmap-stat-scope",
+        label: i18n.statScope,
+        iconHTML: "",
+        click: () => {
+            onOpenScope();
+        },
+    });
+
     if (isMobile) {
         menu.fullscreen();
     } else {
@@ -269,4 +280,33 @@ export function normalizeFromYear(value: unknown): number | null {
         return null;
     }
     return year;
+}
+
+/**
+ * 规范化统计范围：
+ * - null / 缺省 → 不限制
+ * - 非数组 → 回退不限制
+ * - 数组 → 去重后的非空字符串 id 列表（可为空数组）
+ */
+export function normalizeIncludedBoxIds(value: unknown): string[] | null {
+    if (value == null) {
+        return null;
+    }
+    if (!Array.isArray(value)) {
+        return null;
+    }
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const item of value) {
+        if (typeof item !== "string") {
+            continue;
+        }
+        const id = item.trim();
+        if (!id || seen.has(id)) {
+            continue;
+        }
+        seen.add(id);
+        ids.push(id);
+    }
+    return ids;
 }

@@ -3,6 +3,7 @@ export type {
     DayDoc,
     DisplayMode,
     HeatMapConfigOptions,
+    ScopeNotebook,
     StatMode,
     ViewMode,
     WeekStart,
@@ -18,11 +19,14 @@ export {
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
+    normalizeIncludedBoxIds,
     openConfigMenu,
     type OpenConfigMenuOptions,
 } from "./config";
 
-export {queryActivity, queryDayDocs, queryEarliestYear} from "./query";
+export {openScopeDialog, type OpenScopeDialogOptions} from "./scope-dialog";
+
+export {buildBoxFilter, queryActivity, queryDayDocs, queryEarliestYear} from "./query";
 
 export {renderHeatMap} from "./render-heatmap";
 

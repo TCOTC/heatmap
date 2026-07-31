@@ -8,28 +8,32 @@ const CONTAINER_TYPES = "('d', 'l', 'i', 'b', 's', 'callout')";
 /** 避免被思源 /api/query/sql 默认 LIMIT（搜索 Limit，常为 64）截断 */
 const SQL_LIMIT = 5000;
 
+type BoxScope = Pick<HeatMapConfigOptions, "includedBoxIds">;
+
 /** 查询笔记中最早有叶子块活动的年份（过滤条件与热力统计一致） */
 export async function queryEarliestYear(
     mode: StatMode = "created",
+    scope: BoxScope = {includedBoxIds: null},
     signal?: AbortSignal,
 ): Promise<number | null> {
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
+    const boxFilter = buildBoxFilter(scope.includedBoxIds);
     let sql: string;
     if (mode === "updated") {
         sql = `SELECT SUBSTR(MIN(updated), 1, 4) AS year
 FROM blocks
-WHERE ${leafFilter} AND updated != ''
+WHERE ${leafFilter}${boxFilter} AND updated != ''
 LIMIT 1`;
     } else if (mode === "mixed") {
         sql = `SELECT SUBSTR(MIN(t), 1, 4) AS year FROM (
-  SELECT MIN(created) AS t FROM blocks WHERE ${leafFilter} AND created != ''
+  SELECT MIN(created) AS t FROM blocks WHERE ${leafFilter}${boxFilter} AND created != ''
   UNION ALL
-  SELECT MIN(updated) AS t FROM blocks WHERE ${leafFilter} AND updated != ''
+  SELECT MIN(updated) AS t FROM blocks WHERE ${leafFilter}${boxFilter} AND updated != ''
 ) LIMIT 1`;
     } else {
         sql = `SELECT SUBSTR(MIN(created), 1, 4) AS year
 FROM blocks
-WHERE ${leafFilter} AND created != ''
+WHERE ${leafFilter}${boxFilter} AND created != ''
 LIMIT 1`;
     }
 
@@ -44,22 +48,24 @@ LIMIT 1`;
 /** 查询热力图按日叶子块数量（一次 SQL；无 created/updated 索引，多年并发会重复全表扫描） */
 export async function queryActivity(
     mode: StatMode = "created",
-    config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear" | "weekStart" | "viewMode"> = {
+    config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear" | "weekStart" | "viewMode" | "includedBoxIds"> = {
         displayMode: "recent",
         fromYear: null,
         weekStart: "monday",
         viewMode: "heatmap",
+        includedBoxIds: null,
     },
     signal?: AbortSignal,
 ): Promise<DayCount[]> {
     const {startKey, endKeyExclusive} = getQueryBounds(config);
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
+    const boxFilter = buildBoxFilter(config.includedBoxIds);
     let sql: string;
 
     if (mode === "updated") {
         sql = `SELECT SUBSTR(updated, 1, 8) AS date, COUNT(*) AS count
 FROM blocks
-WHERE ${leafFilter}
+WHERE ${leafFilter}${boxFilter}
   AND updated != ''
   AND updated >= '${startKey}'
   AND updated < '${endKeyExclusive}'
@@ -69,12 +75,12 @@ LIMIT ${SQL_LIMIT}`;
     } else if (mode === "mixed") {
         sql = `SELECT date, COUNT(*) AS count FROM (
   SELECT SUBSTR(created, 1, 8) AS date, id FROM blocks
-  WHERE ${leafFilter}
+  WHERE ${leafFilter}${boxFilter}
     AND created >= '${startKey}'
     AND created < '${endKeyExclusive}'
   UNION
   SELECT SUBSTR(updated, 1, 8) AS date, id FROM blocks
-  WHERE ${leafFilter}
+  WHERE ${leafFilter}${boxFilter}
     AND updated != ''
     AND updated >= '${startKey}'
     AND updated < '${endKeyExclusive}'
@@ -85,7 +91,7 @@ LIMIT ${SQL_LIMIT}`;
     } else {
         sql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count
 FROM blocks
-WHERE ${leafFilter}
+WHERE ${leafFilter}${boxFilter}
   AND created >= '${startKey}'
   AND created < '${endKeyExclusive}'
 GROUP BY SUBSTR(created, 1, 8)
@@ -104,6 +110,7 @@ LIMIT ${SQL_LIMIT}`;
 export async function queryDayDocs(
     dateKey: string,
     mode: StatMode = "created",
+    scope: BoxScope = {includedBoxIds: null},
     signal?: AbortSignal,
 ): Promise<DayDoc[]> {
     if (!/^\d{8}$/.test(dateKey)) {
@@ -112,12 +119,13 @@ export async function queryDayDocs(
     const startKey = `${dateKey}000000`;
     const endKeyExclusive = `${nextDateKey(dateKey)}000000`;
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
+    const boxFilter = buildBoxFilter(scope.includedBoxIds);
     let aggSql: string;
 
     if (mode === "updated") {
         aggSql = `SELECT root_id AS id, COUNT(*) AS count
 FROM blocks
-WHERE ${leafFilter}
+WHERE ${leafFilter}${boxFilter}
   AND updated != ''
   AND updated >= '${startKey}'
   AND updated < '${endKeyExclusive}'
@@ -125,12 +133,12 @@ GROUP BY root_id`;
     } else if (mode === "mixed") {
         aggSql = `SELECT root_id AS id, COUNT(*) AS count FROM (
   SELECT id, root_id FROM blocks
-  WHERE ${leafFilter}
+  WHERE ${leafFilter}${boxFilter}
     AND created >= '${startKey}'
     AND created < '${endKeyExclusive}'
   UNION
   SELECT id, root_id FROM blocks
-  WHERE ${leafFilter}
+  WHERE ${leafFilter}${boxFilter}
     AND updated != ''
     AND updated >= '${startKey}'
     AND updated < '${endKeyExclusive}'
@@ -139,7 +147,7 @@ GROUP BY root_id`;
     } else {
         aggSql = `SELECT root_id AS id, COUNT(*) AS count
 FROM blocks
-WHERE ${leafFilter}
+WHERE ${leafFilter}${boxFilter}
   AND created >= '${startKey}'
   AND created < '${endKeyExclusive}'
 GROUP BY root_id`;
@@ -166,6 +174,35 @@ LIMIT ${SQL_LIMIT}`;
         });
     }
     return docs;
+}
+
+/**
+ * 生成 SQL 笔记本过滤片段：
+ * - null → 不限制
+ * - [] → AND 0（无结果）
+ * - [id…] → AND box IN (...)
+ */
+export function buildBoxFilter(includedBoxIds: string[] | null | undefined): string {
+    if (includedBoxIds == null) {
+        return "";
+    }
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const item of includedBoxIds) {
+        if (typeof item !== "string") {
+            continue;
+        }
+        const id = item.trim();
+        if (!id || seen.has(id)) {
+            continue;
+        }
+        seen.add(id);
+        ids.push(id.replace(/'/g, "''"));
+    }
+    if (ids.length === 0) {
+        return " AND 0";
+    }
+    return ` AND box IN (${ids.map((id) => `'${id}'`).join(", ")})`;
 }
 
 function parseIalIcon(ial: string): string {
