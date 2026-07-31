@@ -1,6 +1,7 @@
 import {
     Dialog,
     getFrontend,
+    openMobileFileById,
     openTab,
     Plugin,
     showMessage,
@@ -644,6 +645,12 @@ export default class HeatMap extends Plugin {
                 }
             }),
             onOpenDoc: (id) => {
+                // 移动端 openTab 为空实现，需走 openMobileFileById
+                if (this.isMobile) {
+                    openMobileFileById(this.app, id);
+                    this.dialog?.destroy();
+                    return;
+                }
                 openTab({
                     app: this.app,
                     doc: {id},
