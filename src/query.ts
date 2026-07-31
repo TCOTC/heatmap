@@ -273,6 +273,21 @@ function parseLocalDateKey(dateKey: string): Date | null {
     return date;
 }
 
+/**
+ * 活动查询缓存键：与 queryActivity 实际 SQL 边界 / 过滤条件一致。
+ * 展示形式 / 周起始 / 年份排序等纯布局配置不进键，弹窗内切换可复用结果。
+ */
+export function getActivityCacheKey(
+    mode: StatMode,
+    config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear" | "weekStart" | "viewMode" | "includedBoxIds">,
+): string {
+    const {startKey, endKeyExclusive} = getQueryBounds(config);
+    const box = config.includedBoxIds == null
+        ? "*"
+        : config.includedBoxIds.join("\0");
+    return `${mode}|${startKey}|${endKeyExclusive}|${box}`;
+}
+
 function getQueryBounds(
     config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear" | "weekStart" | "viewMode">,
 ): {startKey: string; endKeyExclusive: string} {
@@ -283,24 +298,35 @@ function getQueryBounds(
     const endKeyExclusive = `${formatDateKey(tomorrow)}000000`;
 
     if (config.displayMode !== "years" || config.fromYear == null) {
-        const start = new Date(today);
-        start.setDate(start.getDate() - 364);
-        if (config.viewMode === "calendar") {
-            // 日历按整月展示，查询对齐到该月 1 号
-            start.setDate(1);
-        } else {
-            alignToWeekStart(start, config.weekStart);
-        }
+        // 取日历整月起点与两种周起始对齐中的最早者，使热力/日历、周一/周日切换共用一次查询
+        const anchor = new Date(today);
+        anchor.setDate(anchor.getDate() - 364);
+
+        const calendarStart = new Date(anchor);
+        calendarStart.setDate(1);
+
+        const mondayStart = new Date(anchor);
+        alignToWeekStart(mondayStart, "monday");
+
+        const sundayStart = new Date(anchor);
+        alignToWeekStart(sundayStart, "sunday");
+
+        const startMs = Math.min(
+            calendarStart.getTime(),
+            mondayStart.getTime(),
+            sundayStart.getTime(),
+        );
         return {
-            startKey: `${formatDateKey(start)}000000`,
+            startKey: `${formatDateKey(new Date(startMs))}000000`,
             endKeyExclusive,
         };
     }
 
     const currentYear = today.getFullYear();
     const fromYear = Math.min(config.fromYear, currentYear);
+    // 结束边界与「最近一年」一致：只查到今天（明天 0 点），不扫当年剩余空档
     return {
         startKey: `${fromYear}0101000000`,
-        endKeyExclusive: `${currentYear + 1}0101000000`,
+        endKeyExclusive,
     };
 }

@@ -152,10 +152,17 @@ export function buildMonthGrid(
 }
 
 /** 按实际显示的 weekday 文案测量列宽（取最长） */
+const weekdayColWidthCache = new Map<string, number>();
+
 export function measureWeekdayColumnWidth(labels: string[]): number {
     const unique = [...new Set(labels.filter(Boolean))];
     if (unique.length === 0) {
         return 18;
+    }
+    const cacheKey = unique.join("\0");
+    const cached = weekdayColWidthCache.get(cacheKey);
+    if (cached != null) {
+        return cached;
     }
     const probe = document.createElement("div");
     // 与 .jchm 字号对齐；探测节点挂在 body 上时拿不到嵌套选择器样式
@@ -170,7 +177,9 @@ export function measureWeekdayColumnWidth(labels: string[]): number {
         max = Math.max(max, span.getBoundingClientRect().width);
     }
     probe.remove();
-    return Math.max(Math.ceil(max), 1);
+    const width = Math.max(Math.ceil(max), 1);
+    weekdayColWidthCache.set(cacheKey, width);
+    return width;
 }
 
 export function buildMonthLabels(weeks: GridCell[][], months: string[]): string[] {

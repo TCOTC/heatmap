@@ -31,7 +31,14 @@ export {openColorDialog, type OpenColorDialogOptions} from "./color-dialog";
 
 export {openScopeDialog, type OpenScopeDialogOptions} from "./scope-dialog";
 
-export {buildBoxFilter, DAY_DOCS_LIMIT, queryActivity, queryDayDocs, queryEarliestYear} from "./query";
+export {
+    buildBoxFilter,
+    DAY_DOCS_LIMIT,
+    getActivityCacheKey,
+    queryActivity,
+    queryDayDocs,
+    queryEarliestYear,
+} from "./query";
 
 export {renderHeatMap} from "./render-heatmap";
 

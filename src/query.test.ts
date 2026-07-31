@@ -6,6 +6,7 @@ import {
 } from "node:test";
 import {
     buildBoxFilter,
+    getActivityCacheKey,
     queryActivity,
     queryDayDocs,
     queryEarliestYear,
@@ -162,12 +163,42 @@ describe("queryActivity", () => {
         });
 
         assert.ok(stmt.includes("20240101000000"));
-        const currentYear = new Date().getFullYear();
-        assert.ok(stmt.includes(`${currentYear + 1}0101000000`));
+        // 结束边界为明天 0 点，不扫到次年元旦
+        const tomorrow = new Date();
+        tomorrow.setHours(0, 0, 0, 0);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const endKey = `${tomorrow.getFullYear()}${String(tomorrow.getMonth() + 1).padStart(2, "0")}${String(tomorrow.getDate()).padStart(2, "0")}000000`;
+        assert.ok(stmt.includes(endKey));
+        assert.ok(!stmt.includes(`${new Date().getFullYear() + 1}0101000000`));
         const start = new Date(2024, 0, 1);
-        const end = new Date(currentYear + 1, 0, 1);
+        const end = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
         const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
         assert.ok(stmt.includes(`LIMIT ${days}`));
+    });
+
+    it("getActivityCacheKey：布局切换（展示形式 / 周起始）不改变键", () => {
+        const recent = {
+            displayMode: "recent" as const,
+            fromYear: null as number | null,
+            weekStart: "monday" as const,
+            viewMode: "heatmap" as const,
+            includedBoxIds: null as string[] | null,
+        };
+        const recentKey = getActivityCacheKey("created", recent);
+        assert.equal(recentKey, getActivityCacheKey("created", {...recent, viewMode: "calendar"}));
+        assert.equal(recentKey, getActivityCacheKey("created", {...recent, weekStart: "sunday"}));
+        assert.notEqual(recentKey, getActivityCacheKey("updated", recent));
+
+        const years = {
+            displayMode: "years" as const,
+            fromYear: 2024,
+            weekStart: "monday" as const,
+            viewMode: "heatmap" as const,
+            includedBoxIds: null as string[] | null,
+        };
+        const yearsKey = getActivityCacheKey("created", years);
+        assert.equal(yearsKey, getActivityCacheKey("created", {...years, weekStart: "sunday", viewMode: "calendar"}));
+        assert.notEqual(yearsKey, getActivityCacheKey("updated", years));
     });
 
     it("白名单笔记本时 SQL 含 box IN", async () => {

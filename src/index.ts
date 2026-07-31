@@ -9,6 +9,7 @@ import {getI18n} from "./i18n";
 import {
     buildYearOptions,
     applyHeatColor,
+    getActivityCacheKey,
     isDisplayMode,
     isStatMode,
     isViewMode,
@@ -28,6 +29,7 @@ import {
     renderHeatMap,
     type DayCount,
     type DayDoc,
+    type DayDocsResult,
     type DisplayMode,
     type StatMode,
     type ViewMode,
@@ -81,6 +83,14 @@ export default class HeatMap extends Plugin {
     private configReady: Promise<void> = Promise.resolve();
     /** 串行化 saveData，避免并发写回旧配置 */
     private saveChain: Promise<void> = Promise.resolve();
+    /**
+     * 弹窗生命周期内的 SQL 结果缓存。
+     * 弹窗打开后用户通常无法编辑文档，数据可视为稳定；关闭时全部清空。
+     */
+    private cachedDays: DayCount[] | null = null;
+    private cachedDaysKey: string | null = null;
+    private earliestYearCache: {key: string; year: number | null;} | null = null;
+    private dayDocsCache = new Map<string, DayDocsResult>();
 
     onload() {
         this.configReady = this.loadData(STORAGE_NAME).then((data) => {
@@ -235,6 +245,8 @@ export default class HeatMap extends Plugin {
             if (!container) {
                 return;
             }
+            this.cachedDays = days;
+            this.cachedDaysKey = getActivityCacheKey(this.config.statMode, this.config);
             this.mountHeatmapPanel(container, days);
         } catch (e) {
             if (this.isAbortError(e) || signal.aborted) {
@@ -290,6 +302,7 @@ export default class HeatMap extends Plugin {
                 this.dialog = undefined;
                 this.view = "heatmap";
                 this.cachedHeatmapPanel = null;
+                this.clearQueryCaches();
                 this.refreshing = false;
                 this.refreshQueued = false;
                 this.loadingDay = false;
@@ -349,20 +362,17 @@ export default class HeatMap extends Plugin {
 
     private async openSettingsMenu(rect: DOMRect) {
         const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
-        let earliest: number | null = null;
-        try {
-            earliest = await queryEarliestYear(this.config.statMode, {
-                includedBoxIds: this.config.includedBoxIds,
-            });
-        } catch (e) {
-            console.error(this.displayName, "query earliest year failed", e);
-        }
+        const earliest = await this.resolveEarliestYear();
         const yearOptions = buildYearOptions(earliest, this.config.fromYear);
         const i18n = getI18n();
 
         const applyConfigPatch = (patch: Partial<PluginConfig>) => {
+            const prevScopeKey = this.earliestYearScopeKey();
             this.config = {...this.config, ...patch};
             this.saveConfig();
+            if (this.earliestYearScopeKey() !== prevScopeKey) {
+                this.earliestYearCache = null;
+            }
 
             // 仅改颜色时直接改 CSS 变量（含日详情缓存的热力图），避免重新跑 SQL
             const keys = Object.keys(patch);
@@ -383,7 +393,7 @@ export default class HeatMap extends Plugin {
                 }
             }
 
-            // 配置变了，缓存的热力图作废；若仍在热力图页则立刻刷新
+            // 配置变了，DOM 缓存作废；若仍在热力图页则立刻刷新（活动数据可按查询键复用）
             this.cachedHeatmapPanel = null;
             if (chartHost && this.view === "heatmap") {
                 this.refreshChart(chartHost);
@@ -487,6 +497,51 @@ export default class HeatMap extends Plugin {
         this.renderPanel(container);
     }
 
+    private clearQueryCaches() {
+        this.cachedDays = null;
+        this.cachedDaysKey = null;
+        this.earliestYearCache = null;
+        this.dayDocsCache.clear();
+    }
+
+    private dayDocsCacheKey(dateKey: string): string {
+        const box = this.config.includedBoxIds == null
+            ? "*"
+            : this.config.includedBoxIds.join("\0");
+        return `${dateKey}|${this.config.statMode}|${box}`;
+    }
+
+    private earliestYearScopeKey(): string {
+        const box = this.config.includedBoxIds == null
+            ? "*"
+            : this.config.includedBoxIds.join("\0");
+        return `${this.config.statMode}|${box}`;
+    }
+
+    private async resolveEarliestYear(): Promise<number | null> {
+        const key = this.earliestYearScopeKey();
+        if (this.earliestYearCache?.key === key) {
+            return this.earliestYearCache.year;
+        }
+        try {
+            const year = await queryEarliestYear(this.config.statMode, {
+                includedBoxIds: this.config.includedBoxIds,
+            });
+            this.earliestYearCache = {key, year};
+            return year;
+        } catch (e) {
+            console.error(this.displayName, "query earliest year failed", e);
+            return null;
+        }
+    }
+
+    private mountChart(chartHost: HTMLElement, days: DayCount[]) {
+        const i18n = getI18n();
+        chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
+            this.openDayDetail(dateKey);
+        }));
+    }
+
     private async refreshChart(chartHost: HTMLElement) {
         if (this.refreshing) {
             this.refreshQueued = true;
@@ -499,10 +554,21 @@ export default class HeatMap extends Plugin {
         try {
             do {
                 this.refreshQueued = false;
+                const queryKey = getActivityCacheKey(this.config.statMode, this.config);
+                const i18n = getI18n();
+
+                // 查询边界未变（如只改年份排序）时复用数据，跳过全表扫描
+                if (this.cachedDays && this.cachedDaysKey === queryKey) {
+                    if (!this.dialog || this.view !== "heatmap") {
+                        continue;
+                    }
+                    this.mountChart(chartHost, this.cachedDays);
+                    continue;
+                }
+
                 this.chartAbort?.abort();
                 this.chartAbort = new AbortController();
                 const {signal} = this.chartAbort;
-                const i18n = getI18n();
                 const hasChart = Boolean(chartHost.querySelector(".jchm"));
 
                 try {
@@ -519,9 +585,9 @@ export default class HeatMap extends Plugin {
                     if (signal.aborted || !this.dialog || this.view !== "heatmap") {
                         continue;
                     }
-                    chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
-                        this.openDayDetail(dateKey);
-                    }));
+                    this.cachedDays = days;
+                    this.cachedDaysKey = queryKey;
+                    this.mountChart(chartHost, days);
                 } catch (e) {
                     if (this.isAbortError(e) || signal.aborted) {
                         continue;
@@ -594,6 +660,16 @@ export default class HeatMap extends Plugin {
         }
 
         const heatmapPanel = container.querySelector(".jchm-panel") as HTMLElement | null;
+        const cacheKey = this.dayDocsCacheKey(dateKey);
+        const cached = this.dayDocsCache.get(cacheKey);
+        if (cached) {
+            if (heatmapPanel) {
+                this.cachedHeatmapPanel = heatmapPanel;
+            }
+            this.mountDayDocPanel(container, dateKey, cached.docs, cached.truncated);
+            return;
+        }
+
         this.loadingDay = true;
         this.dayAbort?.abort();
         this.dayAbort = new AbortController();
@@ -627,7 +703,7 @@ export default class HeatMap extends Plugin {
         };
 
         try {
-            const {docs, truncated} = await this.awaitWithLoadingDelay(
+            const result = await this.awaitWithLoadingDelay(
                 queryDayDocs(
                     dateKey,
                     this.config.statMode,
@@ -641,10 +717,11 @@ export default class HeatMap extends Plugin {
                 return;
             }
 
+            this.dayDocsCache.set(cacheKey, result);
             if (heatmapPanel && !switchedToLoading) {
                 this.cachedHeatmapPanel = heatmapPanel;
             }
-            this.mountDayDocPanel(container, dateKey, docs, truncated);
+            this.mountDayDocPanel(container, dateKey, result.docs, result.truncated);
         } catch (e) {
             if (this.isAbortError(e) || signal.aborted) {
                 return;

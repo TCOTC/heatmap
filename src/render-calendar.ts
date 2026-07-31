@@ -94,6 +94,25 @@ function renderMonthBlock(
 
     const grid = document.createElement("div");
     grid.className = "jchm__cal-grid";
+    if (onDayClick) {
+        grid.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) {
+                return;
+            }
+            const day = target.closest(".jchm__cell--clickable") as HTMLElement | null;
+            if (!day || !grid.contains(day)) {
+                return;
+            }
+            const dateKey = day.getAttribute("data-date");
+            const count = Number(day.getAttribute("data-count"));
+            if (!dateKey || !(count > 0)) {
+                return;
+            }
+            // 不 stopPropagation，让思源 window click 能关掉设置菜单
+            onDayClick(dateKey, count);
+        });
+    }
     for (const week of month.weeks) {
         const row = document.createElement("div");
         row.className = "jchm__cal-week";
@@ -116,11 +135,6 @@ function renderMonthBlock(
                     .replace("${count}", String(cell.count)));
                 if (cell.count > 0 && onDayClick) {
                     day.classList.add("jchm__cell--clickable");
-                    day.addEventListener("click", (event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        onDayClick(cell.date, cell.count);
-                    });
                 }
             }
             row.appendChild(day);
