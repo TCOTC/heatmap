@@ -6,6 +6,7 @@ import {
 import {
     getDefaultWeekStart,
     getI18n,
+    getSiYuanLang,
 } from "./i18n";
 
 function withLang(lang: string | undefined, run: () => void): void {
@@ -23,9 +24,22 @@ function withLang(lang: string | undefined, run: () => void): void {
     }
 }
 
+describe("getSiYuanLang", () => {
+    it("返回思源配置中的语言代码", () => {
+        withLang("zh-CN", () => assert.equal(getSiYuanLang(), "zh-CN"));
+        withLang("zh-TW", () => assert.equal(getSiYuanLang(), "zh-TW"));
+        withLang("ja", () => assert.equal(getSiYuanLang(), "ja"));
+        withLang("en", () => assert.equal(getSiYuanLang(), "en"));
+    });
+
+    it("缺失配置时回退 en", () => {
+        withLang(undefined, () => assert.equal(getSiYuanLang(), "en"));
+    });
+});
+
 describe("getI18n", () => {
-    it("中文语言返回中文文案", () => {
-        withLang("zh_CN", () => {
+    it("简体中文返回简体文案", () => {
+        withLang("zh-CN", () => {
             const i18n = getI18n();
             assert.equal(i18n.openHeatMap, "文档活跃统计");
             assert.equal(i18n.weekdays.length, 7);
@@ -35,14 +49,26 @@ describe("getI18n", () => {
         });
     });
 
-    it("zh 前缀均视为中文", () => {
-        withLang("zh_TW", () => {
-            assert.equal(getI18n().heatmapTitle, "文档活跃统计");
+    it("繁体中文返回繁体文案", () => {
+        withLang("zh-TW", () => {
+            const i18n = getI18n();
+            assert.equal(i18n.openHeatMap, "文檔活躍統計");
+            assert.equal(i18n.settings, "設定");
+            assert.equal(i18n.weekStartMonday, "週一");
         });
     });
 
-    it("非中文回退英文", () => {
-        withLang("en_US", () => {
+    it("日文返回日文文案", () => {
+        withLang("ja", () => {
+            const i18n = getI18n();
+            assert.equal(i18n.openHeatMap, "ドキュメント活動統計");
+            assert.equal(i18n.weekdays[1], "月");
+            assert.equal(i18n.cancel, "キャンセル");
+        });
+    });
+
+    it("非覆盖语种回退英文", () => {
+        withLang("en", () => {
             const i18n = getI18n();
             assert.equal(i18n.openHeatMap, "Document Activity Stats");
             assert.equal(i18n.weekdays[0], "Sun");
@@ -58,14 +84,26 @@ describe("getI18n", () => {
 });
 
 describe("getDefaultWeekStart", () => {
-    it("中文默认周一", () => {
-        withLang("zh_CN", () => {
+    it("仅简体中文默认周一", () => {
+        withLang("zh-CN", () => {
             assert.equal(getDefaultWeekStart(), "monday");
         });
     });
 
+    it("繁体中文默认周日", () => {
+        withLang("zh-TW", () => {
+            assert.equal(getDefaultWeekStart(), "sunday");
+        });
+    });
+
+    it("日文默认周日", () => {
+        withLang("ja", () => {
+            assert.equal(getDefaultWeekStart(), "sunday");
+        });
+    });
+
     it("英文默认周日", () => {
-        withLang("en_US", () => {
+        withLang("en", () => {
             assert.equal(getDefaultWeekStart(), "sunday");
         });
     });

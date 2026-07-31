@@ -1,6 +1,6 @@
 import type {WeekStart} from "./types";
 
-const ZH = {
+const ZH_CN = {
     openHeatMap: "文档活跃统计",
     heatmapTitle: "文档活跃统计",
     loading: "加载中…",
@@ -48,7 +48,103 @@ const ZH = {
     months: ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"],
 };
 
-export type I18n = typeof ZH;
+export type I18n = typeof ZH_CN;
+
+const ZH_TW: I18n = {
+    openHeatMap: "文檔活躍統計",
+    heatmapTitle: "文檔活躍統計",
+    loading: "載入中…",
+    loadFailed: "載入失敗，請查看開發者工具控制台報錯",
+    less: "少",
+    more: "多",
+    totalCount: "共 ${count} 個塊",
+    cellTooltip: "${date}：${count} 個塊",
+    legendTooltipZero: "0 個塊",
+    legendTooltipExact: "${count} 個塊",
+    legendTooltipRange: "${min}–${max} 個塊",
+    legendTooltipMore: "${min}+ 個塊",
+    legendTooltipUnused: "未使用",
+    settings: "設定",
+    statMode: "統計方式",
+    statModeCreated: "按建立時間統計",
+    statModeUpdated: "按最後更新時間統計",
+    statModeMixed: "混合統計",
+    weekStart: "每週第一天",
+    weekStartMonday: "週一",
+    weekStartSunday: "週日",
+    displayRange: "顯示範圍",
+    displayRecentYear: "最近一年",
+    yearOrder: "年份排序",
+    yearOrderNewestFirst: "最近的年份在前",
+    yearOrderOldestFirst: "最近的年份在後",
+    viewMode: "視圖",
+    viewModeHeatmap: "熱力圖",
+    viewModeCalendar: "日曆",
+    statScope: "篩選筆記本",
+    statScopeSelectAll: "全部",
+    statScopeEmpty: "暫無筆記本",
+    statScopeLoadFailed: "載入筆記本列表失敗",
+    color: "格子顏色",
+    colorUseTheme: "使用主題色",
+    cancel: "取消",
+    confirm: "確定",
+    back: "返回",
+    dayEmpty: "該日暫無文檔",
+    daySummary: "${docs} 篇文檔，共 ${blocks} 個塊",
+    dayDocsTruncated: "僅顯示前 ${count} 篇文檔",
+    docBlockCount: "${count} 個塊",
+    loadDayFailed: "載入日詳情失敗",
+    weekdays: ["日", "一", "二", "三", "四", "五", "六"],
+    months: ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"],
+};
+
+const JA: I18n = {
+    openHeatMap: "ドキュメント活動統計",
+    heatmapTitle: "ドキュメント活動統計",
+    loading: "読み込み中…",
+    loadFailed: "読み込みに失敗しました。開発者ツールのコンソールでエラーを確認してください",
+    less: "少",
+    more: "多",
+    totalCount: "合計 ${count} ブロック",
+    cellTooltip: "${date}：${count} ブロック",
+    legendTooltipZero: "0 ブロック",
+    legendTooltipExact: "${count} ブロック",
+    legendTooltipRange: "${min}–${max} ブロック",
+    legendTooltipMore: "${min}+ ブロック",
+    legendTooltipUnused: "未使用",
+    settings: "設定",
+    statMode: "集計方法",
+    statModeCreated: "作成日時で集計",
+    statModeUpdated: "最終更新日時で集計",
+    statModeMixed: "混合集計",
+    weekStart: "週の始まり",
+    weekStartMonday: "月曜日",
+    weekStartSunday: "日曜日",
+    displayRange: "表示範囲",
+    displayRecentYear: "過去 1 年",
+    yearOrder: "年の並び順",
+    yearOrderNewestFirst: "新しい年を先に",
+    yearOrderOldestFirst: "古い年を先に",
+    viewMode: "表示",
+    viewModeHeatmap: "ヒートマップ",
+    viewModeCalendar: "カレンダー",
+    statScope: "ノートブックを絞り込み",
+    statScopeSelectAll: "すべて",
+    statScopeEmpty: "ノートブックがありません",
+    statScopeLoadFailed: "ノートブック一覧の読み込みに失敗しました",
+    color: "セルの色",
+    colorUseTheme: "テーマカラーを使用",
+    cancel: "キャンセル",
+    confirm: "確認",
+    back: "戻る",
+    dayEmpty: "この日のドキュメントはありません",
+    daySummary: "${docs} 件のドキュメント、合計 ${blocks} ブロック",
+    dayDocsTruncated: "先頭 ${count} 件のドキュメントのみ表示",
+    docBlockCount: "${count} ブロック",
+    loadDayFailed: "日別詳細の読み込みに失敗しました",
+    weekdays: ["日", "月", "火", "水", "木", "金", "土"],
+    months: ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"],
+};
 
 const EN: I18n = {
     openHeatMap: "Document Activity Stats",
@@ -98,18 +194,26 @@ const EN: I18n = {
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
 };
 
-/** 思源界面是否为中文 */
-export function isZhLang(): boolean {
-    const lang = (window as any).siyuan?.config?.lang || "en";
-    return String(lang).toLowerCase().startsWith("zh");
+/** 读取思源界面语言代码 */
+export function getSiYuanLang(): string {
+    return String((window as any).siyuan?.config?.lang || "en");
 }
 
-/** 按思源语言配置返回文案，非中文回退英文 */
+/** 按思源语言配置返回文案，未覆盖语种回退英文 */
 export function getI18n(): I18n {
-    return isZhLang() ? ZH : EN;
+    switch (getSiYuanLang()) {
+        case "zh-CN":
+            return ZH_CN;
+        case "zh-TW":
+            return ZH_TW;
+        case "ja":
+            return JA;
+        default:
+            return EN;
+    }
 }
 
-/** 每周第一天默认值：中文周一，英文周日 */
+/** 每周第一天默认值：仅简体中文为周一，其余为周日 */
 export function getDefaultWeekStart(): WeekStart {
-    return isZhLang() ? "monday" : "sunday";
+    return getSiYuanLang() === "zh-CN" ? "monday" : "sunday";
 }
