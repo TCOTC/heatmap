@@ -1,4 +1,5 @@
 import {formatDisplayDate, orderWeekdays} from "./date";
+import {applyHeatColor} from "./config";
 import {buildMonthGrid, buildMonthSpecs, groupMonthsByYear, type MonthGrid} from "./grid";
 import type {I18n} from "./i18n";
 import {calcLevels} from "./levels";
@@ -9,10 +10,10 @@ import type {DayCount, HeatMapConfigOptions} from "./types";
 export function renderCalendarView(
     days: DayCount[],
     i18n: I18n,
-    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder">,
+    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "color">,
     onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
-    const {weekStart, displayMode, fromYear, yearOrder} = config;
+    const {weekStart, displayMode, fromYear, yearOrder, color} = config;
     const countMap = new Map(days.map((d) => [d.date, d.count]));
     const monthSpecs = buildMonthSpecs(displayMode, fromYear, yearOrder);
     const months = monthSpecs.map((spec) => buildMonthGrid(countMap, spec.year, spec.month, weekStart));
@@ -29,6 +30,7 @@ export function renderCalendarView(
 
     const root = document.createElement("div");
     root.className = "jchm jchm--calendar";
+    applyHeatColor(root, color ?? null);
 
     const scrollY = document.createElement("div");
     scrollY.className = "jchm__scroll";

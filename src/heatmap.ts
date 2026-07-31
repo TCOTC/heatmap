@@ -12,6 +12,7 @@ export type {
 } from "./types";
 
 export {
+    applyHeatColor,
     buildYearOptions,
     expandYearRange,
     isDisplayMode,
@@ -20,10 +21,13 @@ export {
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
+    normalizeHeatColor,
     normalizeIncludedBoxIds,
     openConfigMenu,
     type OpenConfigMenuOptions,
 } from "./config";
+
+export {openColorDialog, type OpenColorDialogOptions} from "./color-dialog";
 
 export {openScopeDialog, type OpenScopeDialogOptions} from "./scope-dialog";
 

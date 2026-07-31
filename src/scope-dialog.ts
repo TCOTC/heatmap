@@ -16,7 +16,7 @@ export interface OpenScopeDialogOptions {
 
 let openDialog: Dialog | undefined;
 
-/** 打开「统计范围」笔记本勾选 Dialog（取消不保存，确定后回调） */
+/** 打开「筛选笔记本」勾选 Dialog（取消不保存，确定后回调） */
 export function openScopeDialog(options: OpenScopeDialogOptions): void {
     if (openDialog) {
         return;

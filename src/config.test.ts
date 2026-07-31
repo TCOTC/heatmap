@@ -12,6 +12,7 @@ import {
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
+    normalizeHeatColor,
     normalizeIncludedBoxIds,
 } from "./config";
 
@@ -113,5 +114,25 @@ describe("normalizeIncludedBoxIds", () => {
             normalizeIncludedBoxIds(["a", "  ", "b", "a", 1, null, " c "]),
             ["a", "b", "c"],
         );
+    });
+});
+
+describe("normalizeHeatColor", () => {
+    it("空值与非法回退为跟随主题", () => {
+        assert.equal(normalizeHeatColor(null), null);
+        assert.equal(normalizeHeatColor(undefined), null);
+        assert.equal(normalizeHeatColor(""), null);
+        assert.equal(normalizeHeatColor("   "), null);
+        assert.equal(normalizeHeatColor(123), null);
+        assert.equal(normalizeHeatColor("#gg0000"), null);
+        assert.equal(normalizeHeatColor("#12345"), null);
+        assert.equal(normalizeHeatColor("#1234567"), null);
+    });
+
+    it("接受 #RGB / #RRGGBB，可省略 #，统一小写六位", () => {
+        assert.equal(normalizeHeatColor("#40C463"), "#40c463");
+        assert.equal(normalizeHeatColor("40c463"), "#40c463");
+        assert.equal(normalizeHeatColor("#abc"), "#aabbcc");
+        assert.equal(normalizeHeatColor(" AbC "), "#aabbcc");
     });
 });

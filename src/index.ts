@@ -8,13 +8,16 @@ import {
 import {getI18n} from "./i18n";
 import {
     buildYearOptions,
+    applyHeatColor,
     isDisplayMode,
     isStatMode,
     isViewMode,
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
+    normalizeHeatColor,
     normalizeIncludedBoxIds,
+    openColorDialog,
     openConfigMenu,
     openScopeDialog,
     queryActivity,
@@ -45,6 +48,7 @@ interface PluginConfig {
     yearOrder: YearOrder;
     viewMode: ViewMode;
     includedBoxIds: string[] | null;
+    color: string | null;
 }
 
 export default class HeatMap extends Plugin {
@@ -58,6 +62,7 @@ export default class HeatMap extends Plugin {
         yearOrder: "newestFirst",
         viewMode: "heatmap",
         includedBoxIds: null,
+        color: null,
     };
     private refreshing = false;
     private loadingDay = false;
@@ -140,6 +145,7 @@ export default class HeatMap extends Plugin {
             yearOrder: isYearOrder(raw.yearOrder) ? raw.yearOrder : "newestFirst",
             viewMode: isViewMode(raw.viewMode) ? raw.viewMode : "heatmap",
             includedBoxIds: normalizeIncludedBoxIds(raw.includedBoxIds),
+            color: normalizeHeatColor(raw.color),
         };
     }
 
@@ -351,6 +357,26 @@ export default class HeatMap extends Plugin {
         const applyConfigPatch = (patch: Partial<PluginConfig>) => {
             this.config = {...this.config, ...patch};
             this.saveConfig();
+
+            // 仅改颜色时直接改 CSS 变量（含日详情缓存的热力图），避免重新跑 SQL
+            const keys = Object.keys(patch);
+            if (keys.length === 1 && keys[0] === "color") {
+                const roots = [
+                    chartHost?.querySelector(".jchm"),
+                    this.cachedHeatmapPanel?.querySelector(".jchm"),
+                ];
+                let applied = false;
+                for (const root of roots) {
+                    if (root instanceof HTMLElement) {
+                        applyHeatColor(root, this.config.color);
+                        applied = true;
+                    }
+                }
+                if (applied) {
+                    return;
+                }
+            }
+
             // 配置变了，缓存的热力图作废；若仍在热力图页则立刻刷新
             this.cachedHeatmapPanel = null;
             if (chartHost && this.view === "heatmap") {
@@ -383,6 +409,31 @@ export default class HeatMap extends Plugin {
                             );
                         if (!same) {
                             applyConfigPatch({includedBoxIds});
+                        }
+                    },
+                });
+            },
+            onOpenColor: () => {
+                const previewColor = (next: string | null) => {
+                    const roots = [
+                        chartHost?.querySelector(".jchm"),
+                        this.cachedHeatmapPanel?.querySelector(".jchm"),
+                    ];
+                    for (const root of roots) {
+                        if (root instanceof HTMLElement) {
+                            applyHeatColor(root, next);
+                        }
+                    }
+                };
+                openColorDialog({
+                    i18n,
+                    color: this.config.color,
+                    onPreview: previewColor,
+                    onSave: (color) => {
+                        if (this.config.color !== color) {
+                            applyConfigPatch({color});
+                        } else {
+                            previewColor(color);
                         }
                     },
                 });

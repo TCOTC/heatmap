@@ -54,13 +54,15 @@ export interface OpenConfigMenuOptions {
     rect: DOMRect;
     isMobile: boolean;
     onChange: (patch: Partial<HeatMapConfigOptions>) => void;
-    /** 打开「统计范围」笔记本勾选 Dialog */
+    /** 打开「筛选笔记本」勾选 Dialog */
     onOpenScope: () => void;
+    /** 打开「颜色」十六进制配置 Dialog */
+    onOpenColor: () => void;
 }
 
-/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、统计范围） */
+/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、颜色） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
-    const {i18n, config, yearOptions, rect, isMobile, onChange, onOpenScope} = options;
+    const {i18n, config, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor} = options;
     const menu = new Menu("heatmap-config");
 
     menu.addItem({
@@ -243,6 +245,15 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
         },
     });
 
+    menu.addItem({
+        id: "heatmap-color",
+        label: i18n.color,
+        iconHTML: "",
+        click: () => {
+            onOpenColor();
+        },
+    });
+
     if (isMobile) {
         menu.fullscreen();
     } else {
@@ -309,4 +320,36 @@ export function normalizeIncludedBoxIds(value: unknown): string[] | null {
         ids.push(id);
     }
     return ids;
+}
+
+/**
+ * 规范化热力主色：
+ * - null / 空 / 非法 → null（跟随主题）
+ * - 接受 #RGB / #RRGGBB（可省略 #），统一为小写 #RRGGBB
+ */
+export function normalizeHeatColor(value: unknown): string | null {
+    if (value == null || typeof value !== "string") {
+        return null;
+    }
+    const raw = value.trim();
+    if (!raw) {
+        return null;
+    }
+    const hex = raw.startsWith("#") ? raw.slice(1) : raw;
+    if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+        return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`.toLowerCase();
+    }
+    if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+        return `#${hex.toLowerCase()}`;
+    }
+    return null;
+}
+
+/** 把热力主色写到根节点 CSS 变量；null 则清除以回退主题色 */
+export function applyHeatColor(el: HTMLElement, color: string | null): void {
+    if (color) {
+        el.style.setProperty("--jchm-heat", color);
+    } else {
+        el.style.removeProperty("--jchm-heat");
+    }
 }

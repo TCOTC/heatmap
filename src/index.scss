@@ -196,6 +196,8 @@
       gap: 12px;
       color: var(--b3-theme-on-surface);
       font-size: 12px;
+      /* 热力主色，可由配置覆盖为自定义十六进制 */
+      --jchm-heat: var(--b3-theme-primary);
       /* 热力图格子边长；间隙随比例变化（默认 11px / 3px） */
       --jchm-cell: 11px;
       --jchm-gap: calc(var(--jchm-cell) * 3 / 11);
@@ -356,19 +358,19 @@
         }
 
         &--l1 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 28%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 28%, var(--b3-theme-surface));
         }
 
         &--l2 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 48%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 48%, var(--b3-theme-surface));
         }
 
         &--l3 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 72%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 72%, var(--b3-theme-surface));
         }
 
         &--l4 {
-          --jchm-cell-bg: var(--b3-theme-primary);
+          --jchm-cell-bg: var(--jchm-heat);
         }
       }
 
@@ -458,19 +460,19 @@
          * 避免同月字色黑白跳变；贡献热力图仍用上面的满强度色阶。
          */
         .jchm__cell--l1 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 18%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 18%, var(--b3-theme-surface));
         }
 
         .jchm__cell--l2 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 30%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 30%, var(--b3-theme-surface));
         }
 
         .jchm__cell--l3 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 42%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 42%, var(--b3-theme-surface));
         }
 
         .jchm__cell--l4 {
-          --jchm-cell-bg: color-mix(in srgb, var(--b3-theme-primary) 55%, var(--b3-theme-surface));
+          --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 55%, var(--b3-theme-surface));
         }
 
         .jchm__cal-day {
@@ -532,7 +534,7 @@
   float: right;
 }
 
-/* 统计范围：笔记本勾选 Dialog */
+/* 筛选笔记本：勾选 Dialog */
 .jchm-scope {
   display: flex;
   flex-direction: column;
@@ -630,6 +632,42 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+/* 颜色：原生色板 + 使用主题色 */
+.jchm-color {
+  box-sizing: border-box;
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  &__picker {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--b3-border-color);
+    border-radius: var(--b3-border-radius);
+    background: transparent;
+    cursor: pointer;
+    box-sizing: border-box;
+
+    &::-webkit-color-swatch-wrapper {
+      padding: 2px;
+    }
+
+    &::-webkit-color-swatch {
+      border: none;
+      border-radius: calc(var(--b3-border-radius) - 2px);
+    }
+  }
+
+  &__reset {
+    flex-shrink: 0;
   }
 }
 

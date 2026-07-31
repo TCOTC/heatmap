@@ -48,6 +48,11 @@ export interface HeatMapConfigOptions {
      * - string[]：仅统计这些 boxId；空数组表示不统计任何笔记本
      */
     includedBoxIds: string[] | null;
+    /**
+     * 热力主色（十六进制，如 #40c463）：
+     * - null：跟随主题 --b3-theme-primary
+     */
+    color: string | null;
 }
 
 /** 统计范围 Dialog 中展示的笔记本条目 */

@@ -1,4 +1,5 @@
 import {formatDisplayDate, isSparseWeekday, orderWeekdays} from "./date";
+import {applyHeatColor} from "./config";
 import {buildMonthLabels, buildPeriods, measureWeekdayColumnWidth, type PeriodGrid} from "./grid";
 import type {I18n} from "./i18n";
 import {calcLevels} from "./levels";
@@ -10,7 +11,7 @@ import type {DayCount, HeatMapConfigOptions, WeekStart} from "./types";
 export function renderHeatMap(
     days: DayCount[],
     i18n: I18n,
-    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "viewMode">,
+    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "viewMode" | "color">,
     onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     if (config.viewMode === "calendar") {
@@ -23,10 +24,10 @@ export function renderHeatMap(
 function renderGithubView(
     days: DayCount[],
     i18n: I18n,
-    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder">,
+    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "color">,
     onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
-    const {weekStart, displayMode, fromYear, yearOrder} = config;
+    const {weekStart, displayMode, fromYear, yearOrder, color} = config;
     const countMap = new Map(days.map((d) => [d.date, d.count]));
     const periods = buildPeriods(countMap, displayMode, fromYear, weekStart, yearOrder);
 
@@ -42,6 +43,7 @@ function renderGithubView(
 
     const root = document.createElement("div");
     root.className = "jchm jchm--heatmap";
+    applyHeatColor(root, color ?? null);
 
     const visibleWeekdayLabels = weekdayLabels.filter((_, index) => isSparseWeekday(index, weekStart));
     root.style.setProperty("--jchm-weekday-col", `${measureWeekdayColumnWidth(visibleWeekdayLabels)}px`);
