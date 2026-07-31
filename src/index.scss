@@ -26,6 +26,9 @@
   /* 取消左右 padding，让 jchm__scroll 滚动条贴 dialog 边缘；内容由内层补回 24px */
   padding: 16px 0 8px;
   overflow: hidden;
+  /* 内容水平边距 24px；滚动条宽 10px，配合 scrollbar-gutter 时右侧 padding 减掉以免叠宽 */
+  --jchm-pad-x: 24px;
+  --jchm-scrollbar: 10px;
 
   .jchm-panel {
     flex: 1;
@@ -41,6 +44,108 @@
       min-width: 0;
       display: flex;
       flex-direction: column;
+    }
+
+    &--day {
+      min-width: min(420px, 80vw);
+    }
+
+    &--loading {
+      opacity: 0.55;
+      pointer-events: none;
+      cursor: wait;
+      transition: opacity 0.12s ease;
+    }
+
+    .jchm-day {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-sizing: border-box;
+      color: var(--b3-theme-on-surface);
+
+      &__header {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 28px;
+        padding: 0 24px;
+        box-sizing: border-box;
+      }
+
+      &__back {
+        flex-shrink: 0;
+        margin: 0;
+      }
+
+      &__title {
+        flex: 1;
+        min-width: 0;
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 20px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      &__summary {
+        flex-shrink: 0;
+        font-size: 12px;
+        color: var(--b3-theme-on-surface-light);
+        line-height: 16px;
+        white-space: nowrap;
+      }
+
+      &__body {
+        flex: 1;
+        min-height: 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+        /* 与 .jchm__scroll 一致：左 24px，右 14px + gutter 10px = 24px */
+        padding: 0 var(--jchm-pad-x);
+        padding-right: calc(var(--jchm-pad-x) - var(--jchm-scrollbar));
+        box-sizing: border-box;
+        scrollbar-gutter: stable;
+      }
+
+      &__empty {
+        padding: 24px 0;
+        text-align: center;
+        color: var(--b3-theme-on-surface-light);
+        font-size: 13px;
+      }
+
+      &__list {
+        margin: 0;
+        padding: 0;
+      }
+
+      &__item {
+        .b3-list-item__text {
+          cursor: pointer;
+        }
+
+        .b3-list-item__icon {
+          flex-shrink: 0;
+
+          img,
+          svg {
+            width: 14px;
+            height: 14px;
+            vertical-align: middle;
+          }
+        }
+
+        .counter {
+          flex-shrink: 0;
+          margin-left: 8px;
+        }
+      }
     }
 
     .jchm {
@@ -63,8 +168,11 @@
         min-width: 0;
         overflow-x: hidden;
         overflow-y: auto;
-        padding: 0 24px;
+        /* 左 24px；右 14px + scrollbar-gutter 10px = 24px，与 footer 对齐且避免有无滚动条时跳动 */
+        padding: 0 var(--jchm-pad-x);
+        padding-right: calc(var(--jchm-pad-x) - var(--jchm-scrollbar));
         box-sizing: border-box;
+        scrollbar-gutter: stable;
       }
 
       /* 内层横滑：缩到下限仍溢出时由 overflow:auto 自然出现滚动条 */
@@ -193,6 +301,15 @@
 
         &--empty {
           visibility: hidden;
+        }
+
+        &--clickable {
+          cursor: pointer;
+
+          &:hover {
+            outline: 1px solid var(--b3-theme-on-surface);
+            outline-offset: 1px;
+          }
         }
 
         &--l0 {

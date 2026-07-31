@@ -24,6 +24,13 @@ export interface DayCount {
     count: number;
 }
 
+export interface DayDoc {
+    id: string;
+    title: string;
+    icon: string;
+    count: number;
+}
+
 export interface HeatMapConfigOptions {
     statMode: StatMode;
     weekStart: WeekStart;
@@ -165,16 +172,313 @@ LIMIT ${SQL_LIMIT}`;
     }));
 }
 
+/** 查询某日按统计规则命中的文档（叶子块按 root_id 聚合，块数降序；单条 SQL 带出标题/图标） */
+export async function queryDayDocs(dateKey: string, mode: StatMode = "created"): Promise<DayDoc[]> {
+    if (!/^\d{8}$/.test(dateKey)) {
+        return [];
+    }
+    const startKey = `${dateKey}000000`;
+    const endKeyExclusive = `${nextDateKey(dateKey)}000000`;
+    const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
+    let aggSql: string;
+
+    if (mode === "updated") {
+        aggSql = `SELECT root_id AS id, COUNT(*) AS count
+FROM blocks
+WHERE ${leafFilter}
+  AND updated != ''
+  AND updated >= '${startKey}'
+  AND updated < '${endKeyExclusive}'
+GROUP BY root_id`;
+    } else if (mode === "mixed") {
+        aggSql = `SELECT root_id AS id, COUNT(*) AS count FROM (
+  SELECT id, root_id FROM blocks
+  WHERE ${leafFilter}
+    AND created >= '${startKey}'
+    AND created < '${endKeyExclusive}'
+  UNION
+  SELECT id, root_id FROM blocks
+  WHERE ${leafFilter}
+    AND updated != ''
+    AND updated >= '${startKey}'
+    AND updated < '${endKeyExclusive}'
+)
+GROUP BY root_id`;
+    } else {
+        aggSql = `SELECT root_id AS id, COUNT(*) AS count
+FROM blocks
+WHERE ${leafFilter}
+  AND created >= '${startKey}'
+  AND created < '${endKeyExclusive}'
+GROUP BY root_id`;
+    }
+
+    const sql = `SELECT agg.id AS id, agg.count AS count, d.content AS content, d.ial AS ial
+FROM (${aggSql}) AS agg
+LEFT JOIN blocks d ON d.id = agg.id AND d.type = 'd'
+ORDER BY agg.count DESC, d.content ASC, agg.id ASC
+LIMIT ${SQL_LIMIT}`;
+
+    const rows = await execSql(sql);
+    const docs: DayDoc[] = [];
+    for (const row of rows) {
+        const id = String(row.id || "");
+        if (!id) {
+            continue;
+        }
+        docs.push({
+            id,
+            title: String(row.content || id),
+            icon: parseIalIcon(String(row.ial || "")),
+            count: Number(row.count) || 0,
+        });
+    }
+    return docs;
+}
+
+function parseIalIcon(ial: string): string {
+    const match = /(?:^|\s)icon="([^"]*)"/.exec(ial);
+    return match?.[1] || "";
+}
+
+function nextDateKey(dateKey: string): string {
+    const y = Number(dateKey.slice(0, 4));
+    const m = Number(dateKey.slice(4, 6)) - 1;
+    const d = Number(dateKey.slice(6, 8));
+    const date = new Date(y, m, d);
+    date.setDate(date.getDate() + 1);
+    return formatDateKey(date);
+}
+
 /** 渲染热力图图表区域（GitHub 周列 / 传统月历） */
 export function renderHeatMap(
     days: DayCount[],
     i18n: I18n,
     config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "viewMode">,
+    onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     if (config.viewMode === "calendar") {
-        return renderCalendarView(days, i18n, config);
+        return renderCalendarView(days, i18n, config, onDayClick);
     }
-    return renderGithubView(days, i18n, config);
+    return renderGithubView(days, i18n, config, onDayClick);
+}
+
+export interface RenderDayDocListOptions {
+    dateKey: string;
+    docs: DayDoc[];
+    i18n: I18n;
+    onBack: () => void;
+    onOpenDoc: (id: string) => void;
+}
+
+/** 渲染某日文档扁平列表（块数降序） */
+export function renderDayDocList(options: RenderDayDocListOptions): HTMLElement {
+    const {dateKey, docs, i18n, onBack, onOpenDoc} = options;
+    const root = document.createElement("div");
+    root.className = "jchm-day";
+
+    const header = document.createElement("div");
+    header.className = "jchm-day__header";
+
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "jchm-day__back block__icon block__icon--show ariaLabel";
+    backBtn.setAttribute("data-position", "north");
+    backBtn.setAttribute("aria-label", i18n.back);
+    backBtn.innerHTML = `<svg><use xlink:href="#iconLeft"></use></svg>`;
+    backBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onBack();
+    });
+    header.appendChild(backBtn);
+
+    const title = document.createElement("div");
+    title.className = "jchm-day__title";
+    title.textContent = formatDisplayDate(dateKey);
+    header.appendChild(title);
+
+    const totalBlocks = docs.reduce((sum, doc) => sum + doc.count, 0);
+    const summary = document.createElement("div");
+    summary.className = "jchm-day__summary";
+    summary.textContent = i18n.daySummary
+        .replace("${docs}", String(docs.length))
+        .replace("${blocks}", String(totalBlocks));
+    header.appendChild(summary);
+    root.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "jchm-day__body";
+
+    if (docs.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "jchm-day__empty";
+        empty.textContent = i18n.dayEmpty;
+        body.appendChild(empty);
+    } else {
+        const list = document.createElement("ul");
+        list.className = "b3-list b3-list--background jchm-day__list";
+        for (const doc of docs) {
+            list.appendChild(renderDayDocItem(doc, i18n, onOpenDoc));
+        }
+        body.appendChild(list);
+    }
+    root.appendChild(body);
+    return root;
+}
+
+function renderDayDocItem(
+    doc: DayDoc,
+    i18n: I18n,
+    onOpenDoc: (id: string) => void,
+): HTMLElement {
+    const li = document.createElement("li");
+    li.className = "b3-list-item b3-list-item--narrow jchm-day__item";
+    li.setAttribute("data-node-id", doc.id);
+
+    const icon = document.createElement("span");
+    icon.className = "b3-list-item__icon popover__block";
+    icon.setAttribute("data-position", "8east");
+    icon.setAttribute("data-id", doc.id);
+    setDocIconContent(icon, doc.icon, doc.id);
+    li.appendChild(icon);
+
+    const text = document.createElement("span");
+    text.className = "b3-list-item__text";
+    text.textContent = doc.title;
+    text.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenDoc(doc.id);
+    });
+    li.appendChild(text);
+
+    const counter = document.createElement("span");
+    counter.className = "counter ariaLabel";
+    counter.setAttribute("data-position", "8west");
+    counter.setAttribute("aria-label", i18n.docBlockCount.replace("${count}", String(doc.count)));
+    counter.textContent = String(doc.count);
+    li.appendChild(counter);
+
+    return li;
+}
+
+const DYNAMIC_ICON_PREFIX = "api/icon/getDynamicIcon";
+const URL_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
+
+type IconValueKind = "unicode" | "custom" | "dynamic" | "network" | "invalid";
+
+/** 对齐思源 getIconValueKind / unicode2Emoji，避免动态图标等被误判后回退 SVG */
+function setDocIconContent(el: HTMLElement, icon: string, docId = ""): void {
+    const raw = (icon || getDefaultFileIcon() || "1f4c4").trim();
+    const value = decodeIconAmp(raw);
+    const kind = getIconValueKind(value);
+
+    if (kind === "dynamic" || kind === "network" || kind === "custom") {
+        const img = document.createElement("img");
+        if (kind === "custom") {
+            img.src = `/emojis/${value}`;
+        } else if (kind === "network") {
+            img.src = normalizeNetworkIconURL(value) || value;
+            img.referrerPolicy = "no-referrer";
+        } else {
+            img.src = bindDynamicIconTarget(value, docId);
+        }
+        el.replaceChildren(img);
+        return;
+    }
+
+    if (kind === "unicode") {
+        const emoji = unicodeToEmoji(value);
+        if (emoji) {
+            el.textContent = emoji;
+            return;
+        }
+    }
+
+    // invalid / 解析失败：回退默认文件 emoji（与文档树一致，不用 #iconFile）
+    if (value !== "1f4c4") {
+        const fallback = getDefaultFileIcon() || "1f4c4";
+        if (fallback !== value) {
+            setDocIconContent(el, fallback);
+            return;
+        }
+    }
+    el.textContent = unicodeToEmoji("1f4c4");
+}
+
+function getIconValueKind(value: string): IconValueKind {
+    if (value.startsWith(DYNAMIC_ICON_PREFIX)) {
+        return "dynamic";
+    }
+    if (normalizeNetworkIconURL(value)) {
+        return "network";
+    }
+    if (URL_SCHEME_PATTERN.test(value) || value.startsWith("//")) {
+        return "invalid";
+    }
+    if (value.includes(".")) {
+        return "custom";
+    }
+    return "unicode";
+}
+
+function normalizeNetworkIconURL(value: string): string | undefined {
+    try {
+        const url = new URL(value.trim());
+        if ((url.protocol !== "http:" && url.protocol !== "https:") || !url.host) {
+            return;
+        }
+        return url.href;
+    } catch {
+        return;
+    }
+}
+
+/** type=8 文本动态图标需绑定文档 id，否则服务端无法生成 */
+function bindDynamicIconTarget(value: string, targetID: string): string {
+    if (getIconValueKind(value) !== "dynamic") {
+        return value;
+    }
+    const [path, query = ""] = value.split("?", 2);
+    const params = new URLSearchParams(query);
+    if (params.get("type") === "8" && targetID) {
+        params.set("id", targetID);
+    } else {
+        params.delete("id");
+    }
+    params.sort();
+    const boundQuery = params.toString();
+    return boundQuery ? `${path}?${boundQuery}` : path;
+}
+
+function decodeIconAmp(value: string): string {
+    return value.replace(/&amp;/g, "&");
+}
+
+function getDefaultFileIcon(): string {
+    try {
+        const images = (window as any).siyuan?.storage?.["local-images"];
+        return String(images?.file || "");
+    } catch {
+        return "";
+    }
+}
+
+function unicodeToEmoji(unicode: string): string {
+    try {
+        let emoji = "";
+        unicode.split("-").forEach((item) => {
+            if (item.length < 5) {
+                emoji += String.fromCodePoint(parseInt("0" + item, 16));
+            } else {
+                emoji += String.fromCodePoint(parseInt(item, 16));
+            }
+        });
+        return emoji;
+    } catch {
+        return "";
+    }
 }
 
 /** 渲染 GitHub 风格热力图 */
@@ -182,6 +486,7 @@ function renderGithubView(
     days: DayCount[],
     i18n: I18n,
     config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder">,
+    onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     const {weekStart, displayMode, fromYear, yearOrder} = config;
     const countMap = new Map(days.map((d) => [d.date, d.count]));
@@ -216,7 +521,7 @@ function renderGithubView(
     let maxWeeks = 0;
     for (const period of periods) {
         maxWeeks = Math.max(maxWeeks, period.weeks.length);
-        track.appendChild(renderPeriod(period, i18n, weekdayLabels, weekStart, levelOf));
+        track.appendChild(renderPeriod(period, i18n, weekdayLabels, weekStart, levelOf, onDayClick));
     }
     // 供 CSS clamp 计算格子边长（最宽年份的周数）
     root.style.setProperty("--jchm-weeks", String(Math.max(maxWeeks, 1)));
@@ -239,6 +544,7 @@ function renderCalendarView(
     days: DayCount[],
     i18n: I18n,
     config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder">,
+    onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     const {weekStart, displayMode, fromYear, yearOrder} = config;
     const countMap = new Map(days.map((d) => [d.date, d.count]));
@@ -281,7 +587,7 @@ function renderCalendarView(
         const monthsGrid = document.createElement("div");
         monthsGrid.className = "jchm__cal-months";
         for (const month of group.months) {
-            monthsGrid.appendChild(renderMonthBlock(month, i18n, weekdayLabels, levelOf));
+            monthsGrid.appendChild(renderMonthBlock(month, i18n, weekdayLabels, levelOf, onDayClick));
         }
         yearSection.appendChild(monthsGrid);
         track.appendChild(yearSection);
@@ -741,6 +1047,7 @@ function renderPeriod(
     weekdayLabels: string[],
     weekStart: WeekStart,
     levels: (count: number) => number,
+    onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     const section = document.createElement("div");
     section.className = "jchm__period";
@@ -787,9 +1094,19 @@ function renderPeriod(
                 const level = cell.count <= 0 ? 0 : levels(cell.count);
                 day.className = `jchm__cell jchm__cell--l${level} ariaLabel`;
                 day.setAttribute("data-position", "north");
+                day.setAttribute("data-date", cell.date);
+                day.setAttribute("data-count", String(cell.count));
                 day.setAttribute("aria-label", i18n.cellTooltip
                     .replace("${date}", formatDisplayDate(cell.date))
                     .replace("${count}", String(cell.count)));
+                if (cell.count > 0 && onDayClick) {
+                    day.classList.add("jchm__cell--clickable");
+                    day.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onDayClick(cell.date, cell.count);
+                    });
+                }
             }
             col.appendChild(day);
         }
@@ -805,6 +1122,7 @@ function renderMonthBlock(
     i18n: I18n,
     weekdayLabels: string[],
     levels: (count: number) => number,
+    onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     const block = document.createElement("div");
     block.className = "jchm__cal-month";
@@ -841,9 +1159,19 @@ function renderMonthBlock(
                 day.className = `jchm__cal-day jchm__cell jchm__cell--l${level} ariaLabel`;
                 day.textContent = String(cell.day || Number(cell.date.slice(6, 8)));
                 day.setAttribute("data-position", "north");
+                day.setAttribute("data-date", cell.date);
+                day.setAttribute("data-count", String(cell.count));
                 day.setAttribute("aria-label", i18n.cellTooltip
                     .replace("${date}", formatDisplayDate(cell.date))
                     .replace("${count}", String(cell.count)));
+                if (cell.count > 0 && onDayClick) {
+                    day.classList.add("jchm__cell--clickable");
+                    day.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onDayClick(cell.date, cell.count);
+                    });
+                }
             }
             row.appendChild(day);
         }

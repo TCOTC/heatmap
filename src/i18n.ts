@@ -27,6 +27,11 @@ const ZH = {
     viewMode: "展示形式",
     viewModeHeatmap: "GitHub 热力图",
     viewModeCalendar: "传统日历",
+    back: "返回",
+    dayEmpty: "该日暂无文档",
+    daySummary: "${docs} 篇文档，共 ${blocks} 个块",
+    docBlockCount: "${count} 个块",
+    loadDayFailed: "加载日详情失败",
     weekdays: ["日", "一", "二", "三", "四", "五", "六"],
     months: ["1 月", "2 月", "3 月", "4 月", "5 月", "6 月", "7 月", "8 月", "9 月", "10 月", "11 月", "12 月"],
 };
@@ -62,6 +67,11 @@ const EN: I18n = {
     viewMode: "Layout",
     viewModeHeatmap: "GitHub heatmap",
     viewModeCalendar: "Calendar",
+    back: "Back",
+    dayEmpty: "No documents on this day",
+    daySummary: "${docs} docs, ${blocks} blocks",
+    docBlockCount: "${count} blocks",
+    loadDayFailed: "Failed to load day details",
     weekdays: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
     months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
 };

@@ -1,6 +1,7 @@
 import {
     Dialog,
     getFrontend,
+    openTab,
     Plugin,
     showMessage,
 } from "siyuan";
@@ -15,7 +16,9 @@ import {
     normalizeFromYear,
     openConfigMenu,
     queryActivity,
+    queryDayDocs,
     queryEarliestYear,
+    renderDayDocList,
     renderHeatMap,
     type DisplayMode,
     type StatMode,
@@ -48,6 +51,10 @@ export default class HeatMap extends Plugin {
         viewMode: "heatmap",
     };
     private refreshing = false;
+    private loadingDay = false;
+    private view: "heatmap" | "day" = "heatmap";
+    /** 进入日详情前暂存热力图面板，返回时直接还原，避免重复 SQL */
+    private cachedHeatmapPanel: HTMLElement | null = null;
 
     onload() {
         this.loadData(STORAGE_NAME).then((data) => {
@@ -137,12 +144,15 @@ export default class HeatMap extends Plugin {
         content.className = "b3-dialog__content jchm-dialog";
         content.innerHTML = `<div class="jchm-panel">${i18n.loading}</div>`;
 
+        this.view = "heatmap";
         this.dialog = new Dialog({
             title: i18n.heatmapTitle,
             content: content.outerHTML,
             width: "max-content",
             destroyCallback: () => {
                 this.dialog = undefined;
+                this.view = "heatmap";
+                this.cachedHeatmapPanel = null;
             },
         });
 
@@ -170,7 +180,7 @@ export default class HeatMap extends Plugin {
         btn.className = "jchm-dialog__setting block__icon block__icon--show ariaLabel";
         btn.setAttribute("data-position", "north");
         btn.setAttribute("aria-label", i18n.settings);
-        btn.innerHTML = `<svg><use xlink:href="#iconSettings"></use></svg>`;
+        btn.innerHTML = "<svg><use xlink:href=\"#iconSettings\"></use></svg>";
         btn.addEventListener("mousedown", (event) => {
             // 避免点设置时触发标题栏 drag，把弹窗钉成固定 top/left
             event.preventDefault();
@@ -209,14 +219,22 @@ export default class HeatMap extends Plugin {
             onChange: (patch) => {
                 this.config = {...this.config, ...patch};
                 this.saveConfig();
-                if (chartHost) {
+                // 配置变了，缓存的热力图作废；若仍在热力图页则立刻刷新
+                this.cachedHeatmapPanel = null;
+                if (chartHost && this.view === "heatmap") {
                     this.refreshChart(chartHost);
                 }
             },
         });
     }
 
+    private getDialogBody(): HTMLElement | null {
+        return this.dialog?.element.querySelector(".jchm-dialog") as HTMLElement | null;
+    }
+
     private async renderPanel(container: HTMLElement) {
+        this.view = "heatmap";
+        this.cachedHeatmapPanel = null;
         const i18n = getI18n();
         const panel = document.createElement("div");
         panel.className = "jchm-panel";
@@ -228,6 +246,16 @@ export default class HeatMap extends Plugin {
 
         container.replaceChildren(panel);
         await this.refreshChart(chartHost);
+    }
+
+    private restoreHeatmapPanel(container: HTMLElement) {
+        if (this.cachedHeatmapPanel) {
+            this.view = "heatmap";
+            container.replaceChildren(this.cachedHeatmapPanel);
+            this.cachedHeatmapPanel = null;
+            return;
+        }
+        this.renderPanel(container);
     }
 
     private async refreshChart(chartHost: HTMLElement) {
@@ -242,19 +270,74 @@ export default class HeatMap extends Plugin {
         }
         try {
             const days = await queryActivity(this.config.statMode, this.config);
-            if (!this.dialog) {
+            if (!this.dialog || this.view !== "heatmap") {
                 return;
             }
-            chartHost.replaceChildren(renderHeatMap(days, i18n, this.config));
+            chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
+                this.openDayDetail(dateKey);
+            }));
         } catch (e) {
             console.error(this.displayName, e);
-            if (!this.dialog) {
+            if (!this.dialog || this.view !== "heatmap") {
                 return;
             }
             chartHost.textContent = i18n.loadFailed;
             showMessage(`${this.displayName}: ${i18n.loadFailed}`);
         } finally {
             this.refreshing = false;
+        }
+    }
+
+    private async openDayDetail(dateKey: string) {
+        const container = this.getDialogBody();
+        if (!container || this.loadingDay) {
+            return;
+        }
+
+        const heatmapPanel = container.querySelector(".jchm-panel") as HTMLElement | null;
+        this.loadingDay = true;
+        // 先保留热力图，等 SQL 完成再一次切换，避免 loading 中间态造成高度抖动
+        heatmapPanel?.classList.add("jchm-panel--loading");
+
+        const i18n = getI18n();
+        try {
+            const docs = await queryDayDocs(dateKey, this.config.statMode);
+            if (!this.dialog) {
+                return;
+            }
+
+            if (heatmapPanel) {
+                heatmapPanel.classList.remove("jchm-panel--loading");
+                this.cachedHeatmapPanel = heatmapPanel;
+            }
+
+            this.view = "day";
+            const panel = document.createElement("div");
+            panel.className = "jchm-panel jchm-panel--day";
+            panel.appendChild(renderDayDocList({
+                dateKey,
+                docs,
+                i18n,
+                onBack: () => {
+                    const body = this.getDialogBody();
+                    if (body) {
+                        this.restoreHeatmapPanel(body);
+                    }
+                },
+                onOpenDoc: (id) => {
+                    openTab({
+                        app: this.app,
+                        doc: {id},
+                    });
+                },
+            }));
+            container.replaceChildren(panel);
+        } catch (e) {
+            console.error(this.displayName, e);
+            heatmapPanel?.classList.remove("jchm-panel--loading");
+            showMessage(`${this.displayName}: ${i18n.loadDayFailed}`);
+        } finally {
+            this.loadingDay = false;
         }
     }
 }
