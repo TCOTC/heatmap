@@ -9,7 +9,10 @@ const CONTAINER_TYPES = "('d', 'l', 'i', 'b', 's', 'callout')";
 const SQL_LIMIT = 5000;
 
 /** 查询笔记中最早有叶子块活动的年份（过滤条件与热力统计一致） */
-export async function queryEarliestYear(mode: StatMode = "created"): Promise<number | null> {
+export async function queryEarliestYear(
+    mode: StatMode = "created",
+    signal?: AbortSignal,
+): Promise<number | null> {
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
     let sql: string;
     if (mode === "updated") {
@@ -30,7 +33,7 @@ WHERE ${leafFilter} AND created != ''
 LIMIT 1`;
     }
 
-    const rows = await execSql(sql);
+    const rows = await execSql(sql, signal);
     if (rows.length === 0) {
         return null;
     }
@@ -47,6 +50,7 @@ export async function queryActivity(
         weekStart: "monday",
         viewMode: "heatmap",
     },
+    signal?: AbortSignal,
 ): Promise<DayCount[]> {
     const {startKey, endKeyExclusive} = getQueryBounds(config);
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
@@ -89,7 +93,7 @@ ORDER BY date ASC
 LIMIT ${SQL_LIMIT}`;
     }
 
-    const rows = await execSql(sql);
+    const rows = await execSql(sql, signal);
     return rows.map((row) => ({
         date: String(row.date),
         count: Number(row.count) || 0,
@@ -97,7 +101,11 @@ LIMIT ${SQL_LIMIT}`;
 }
 
 /** 查询某日按统计规则命中的文档（叶子块按 root_id 聚合，块数降序；单条 SQL 带出标题/图标） */
-export async function queryDayDocs(dateKey: string, mode: StatMode = "created"): Promise<DayDoc[]> {
+export async function queryDayDocs(
+    dateKey: string,
+    mode: StatMode = "created",
+    signal?: AbortSignal,
+): Promise<DayDoc[]> {
     if (!/^\d{8}$/.test(dateKey)) {
         return [];
     }
@@ -143,7 +151,7 @@ LEFT JOIN blocks d ON d.id = agg.id AND d.type = 'd'
 ORDER BY agg.count DESC, d.content ASC, agg.id ASC
 LIMIT ${SQL_LIMIT}`;
 
-    const rows = await execSql(sql);
+    const rows = await execSql(sql, signal);
     const docs: DayDoc[] = [];
     for (const row of rows) {
         const id = String(row.id || "");
@@ -174,8 +182,22 @@ function nextDateKey(dateKey: string): string {
     return formatDateKey(date);
 }
 
-async function execSql(stmt: string): Promise<Array<Record<string, unknown>>> {
-    const response = await fetchSyncPost("/api/query/sql", {stmt});
+async function execSql(
+    stmt: string,
+    signal?: AbortSignal,
+): Promise<Array<Record<string, unknown>>> {
+    let response: {code: number; msg: string; data?: unknown;};
+    if (signal) {
+        // fetchSyncPost 不支持 AbortSignal；可取消场景走原生 fetch
+        const res = await fetch("/api/query/sql", {
+            method: "POST",
+            body: JSON.stringify({stmt}),
+            signal,
+        });
+        response = await res.json() as {code: number; msg: string; data?: unknown;};
+    } else {
+        response = await fetchSyncPost("/api/query/sql", {stmt});
+    }
     if (response.code !== 0 || !Array.isArray(response.data)) {
         throw new Error(response.msg || "sql query failed");
     }

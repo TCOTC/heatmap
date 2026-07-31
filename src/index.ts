@@ -19,7 +19,10 @@ import {
     queryDayDocs,
     queryEarliestYear,
     renderDayDocList,
+    renderDayLoading,
     renderHeatMap,
+    type DayCount,
+    type DayDoc,
     type DisplayMode,
     type StatMode,
     type ViewMode,
@@ -29,6 +32,8 @@ import {
 import "./index.scss";
 
 const STORAGE_NAME = "config.json";
+/** 查询超过该时间仍未返回时，再显示 Loading 占位弹窗/面板 */
+const LOADING_DELAY_MS = 700;
 
 interface PluginConfig {
     statMode: StatMode;
@@ -55,6 +60,12 @@ export default class HeatMap extends Plugin {
     private view: "heatmap" | "day" = "heatmap";
     /** 进入日详情前暂存热力图面板，返回时直接还原，避免重复 SQL */
     private cachedHeatmapPanel: HTMLElement | null = null;
+    /** 打开统计面板时的请求；关闭弹窗或重复打开前 abort */
+    private openAbort?: AbortController;
+    /** 日详情请求；关闭弹窗 / 返回热力图时 abort */
+    private dayAbort?: AbortController;
+    /** 热力图刷新请求 */
+    private chartAbort?: AbortController;
 
     onload() {
         this.loadData(STORAGE_NAME).then((data) => {
@@ -86,6 +97,7 @@ export default class HeatMap extends Plugin {
     }
 
     onunload() {
+        this.abortAllLoads();
         this.dialog?.destroy();
         console.log(this.displayName, "plugin unloaded");
     }
@@ -134,7 +146,104 @@ export default class HeatMap extends Plugin {
         }
     }
 
+    private abortAllLoads() {
+        this.openAbort?.abort();
+        this.dayAbort?.abort();
+        this.chartAbort?.abort();
+        this.openAbort = undefined;
+        this.dayAbort = undefined;
+        this.chartAbort = undefined;
+    }
+
+    private isAbortError(error: unknown): boolean {
+        return error instanceof DOMException && error.name === "AbortError"
+            || error instanceof Error && error.name === "AbortError";
+    }
+
+    /** 先等数据；超过 delay 仍未完成则回调展示 Loading，再继续等到数据或 abort */
+    private async awaitWithLoadingDelay<T>(
+        task: Promise<T>,
+        onShowLoading: () => void,
+        signal: AbortSignal,
+        delayMs = LOADING_DELAY_MS,
+    ): Promise<T> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const delayPromise = new Promise<"delay">((resolve) => {
+            timer = setTimeout(() => resolve("delay"), delayMs);
+        });
+
+        try {
+            const raced = await Promise.race([
+                task.then((value) => ({kind: "data" as const, value})),
+                delayPromise.then(() => ({kind: "delay" as const})),
+            ]);
+            if (raced.kind === "data") {
+                return raced.value;
+            }
+            if (!signal.aborted) {
+                onShowLoading();
+            }
+            return await task;
+        } finally {
+            if (timer !== undefined) {
+                clearTimeout(timer);
+            }
+        }
+    }
+
     private async openHeatMap() {
+        if (this.dialog || this.openAbort) {
+            return;
+        }
+
+        this.view = "heatmap";
+        this.cachedHeatmapPanel = null;
+        this.openAbort = new AbortController();
+        const {signal} = this.openAbort;
+        const i18n = getI18n();
+
+        try {
+            const days = await this.awaitWithLoadingDelay(
+                queryActivity(this.config.statMode, this.config, signal),
+                () => {
+                    this.ensureDialog(true);
+                },
+                signal,
+            );
+            if (signal.aborted) {
+                return;
+            }
+
+            this.ensureDialog(false);
+            const container = this.getDialogBody();
+            if (!container) {
+                return;
+            }
+            this.mountHeatmapPanel(container, days);
+        } catch (e) {
+            if (this.isAbortError(e) || signal.aborted) {
+                return;
+            }
+            console.error(this.displayName, e);
+            showMessage(`${this.displayName}: ${i18n.loadFailed}`);
+            if (this.dialog) {
+                const container = this.getDialogBody();
+                if (container) {
+                    const panel = document.createElement("div");
+                    panel.className = "jchm-panel";
+                    panel.textContent = i18n.loadFailed;
+                    container.replaceChildren(panel);
+                }
+            }
+        } finally {
+            if (this.openAbort?.signal === signal) {
+                this.openAbort = undefined;
+            }
+        }
+    }
+
+    /** 若弹窗尚未创建则创建；withLoading 为首次内容是否使用 Loading 占位 */
+    private ensureDialog(withLoading: boolean) {
         if (this.dialog) {
             return;
         }
@@ -142,30 +251,51 @@ export default class HeatMap extends Plugin {
         const i18n = getI18n();
         const content = document.createElement("div");
         content.className = "b3-dialog__content jchm-dialog";
-        content.innerHTML = `<div class="jchm-panel">${i18n.loading}</div>`;
+        if (withLoading) {
+            const panel = document.createElement("div");
+            panel.className = "jchm-panel";
+            panel.appendChild(this.createLoadingEl());
+            content.appendChild(panel);
+        } else {
+            const panel = document.createElement("div");
+            panel.className = "jchm-panel";
+            const chartHost = document.createElement("div");
+            chartHost.className = "jchm-panel__chart";
+            panel.appendChild(chartHost);
+            content.appendChild(panel);
+        }
 
-        this.view = "heatmap";
         this.dialog = new Dialog({
             title: i18n.heatmapTitle,
             content: content.outerHTML,
             width: "max-content",
             destroyCallback: () => {
+                this.abortAllLoads();
                 this.dialog = undefined;
                 this.view = "heatmap";
                 this.cachedHeatmapPanel = null;
+                this.refreshing = false;
+                this.loadingDay = false;
             },
         });
 
         this.dialog.element.querySelector(".b3-dialog")?.classList.add("jchm-dialog-host");
         this.dialog.element.querySelector(".b3-dialog__container")?.classList.add("jchm-dialog__container");
-
-        const container = this.dialog.element.querySelector(".jchm-dialog") as HTMLElement;
-        if (!container) {
-            return;
-        }
-
         this.mountSettingsButton(this.dialog.element);
-        await this.renderPanel(container);
+    }
+
+    private mountHeatmapPanel(container: HTMLElement, days: DayCount[]) {
+        this.view = "heatmap";
+        const i18n = getI18n();
+        const panel = document.createElement("div");
+        panel.className = "jchm-panel";
+        const chartHost = document.createElement("div");
+        chartHost.className = "jchm-panel__chart";
+        chartHost.appendChild(renderHeatMap(days, i18n, this.config, (dateKey) => {
+            this.openDayDetail(dateKey);
+        }));
+        panel.appendChild(chartHost);
+        container.replaceChildren(panel);
     }
 
     private mountSettingsButton(dialogEl: HTMLElement) {
@@ -232,16 +362,22 @@ export default class HeatMap extends Plugin {
         return this.dialog?.element.querySelector(".jchm-dialog") as HTMLElement | null;
     }
 
+    private createLoadingEl(): HTMLElement {
+        const el = document.createElement("div");
+        el.className = "jchm-loading";
+        el.setAttribute("aria-label", getI18n().loading);
+        el.innerHTML = `<img width="48" height="48" src="/stage/loading-pure.svg" alt="">`;
+        return el;
+    }
+
     private async renderPanel(container: HTMLElement) {
         this.view = "heatmap";
         this.cachedHeatmapPanel = null;
-        const i18n = getI18n();
         const panel = document.createElement("div");
         panel.className = "jchm-panel";
 
         const chartHost = document.createElement("div");
         chartHost.className = "jchm-panel__chart";
-        chartHost.textContent = i18n.loading;
         panel.appendChild(chartHost);
 
         container.replaceChildren(panel);
@@ -249,6 +385,10 @@ export default class HeatMap extends Plugin {
     }
 
     private restoreHeatmapPanel(container: HTMLElement) {
+        this.dayAbort?.abort();
+        this.dayAbort = undefined;
+        this.loadingDay = false;
+
         if (this.cachedHeatmapPanel) {
             this.view = "heatmap";
             container.replaceChildren(this.cachedHeatmapPanel);
@@ -263,20 +403,33 @@ export default class HeatMap extends Plugin {
             return;
         }
         this.refreshing = true;
+        this.chartAbort?.abort();
+        this.chartAbort = new AbortController();
+        const {signal} = this.chartAbort;
         const i18n = getI18n();
-        // 已有图表时保留旧内容，避免切换统计方式时弹窗高度先塌再撑开
-        if (!chartHost.querySelector(".jchm")) {
-            chartHost.textContent = i18n.loading;
-        }
+        const hasChart = Boolean(chartHost.querySelector(".jchm"));
+
         try {
-            const days = await queryActivity(this.config.statMode, this.config);
-            if (!this.dialog || this.view !== "heatmap") {
+            const days = await this.awaitWithLoadingDelay(
+                queryActivity(this.config.statMode, this.config, signal),
+                () => {
+                    // 已有图表时保留旧内容；仅空壳时才上 Loading
+                    if (!hasChart && !signal.aborted) {
+                        chartHost.replaceChildren(this.createLoadingEl());
+                    }
+                },
+                signal,
+            );
+            if (signal.aborted || !this.dialog || this.view !== "heatmap") {
                 return;
             }
             chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
                 this.openDayDetail(dateKey);
             }));
         } catch (e) {
+            if (this.isAbortError(e) || signal.aborted) {
+                return;
+            }
             console.error(this.displayName, e);
             if (!this.dialog || this.view !== "heatmap") {
                 return;
@@ -284,59 +437,116 @@ export default class HeatMap extends Plugin {
             chartHost.textContent = i18n.loadFailed;
             showMessage(`${this.displayName}: ${i18n.loadFailed}`);
         } finally {
+            if (this.chartAbort?.signal === signal) {
+                this.chartAbort = undefined;
+            }
             this.refreshing = false;
         }
     }
 
+    private bindDayBack(onBack: () => void): () => void {
+        return () => {
+            this.dayAbort?.abort();
+            this.dayAbort = undefined;
+            this.loadingDay = false;
+            onBack();
+        };
+    }
+
+    private mountDayDocPanel(container: HTMLElement, dateKey: string, docs: DayDoc[]) {
+        const i18n = getI18n();
+        this.view = "day";
+        const panel = document.createElement("div");
+        panel.className = "jchm-panel jchm-panel--day";
+        panel.appendChild(renderDayDocList({
+            dateKey,
+            docs,
+            i18n,
+            onBack: this.bindDayBack(() => {
+                const body = this.getDialogBody();
+                if (body) {
+                    this.restoreHeatmapPanel(body);
+                }
+            }),
+            onOpenDoc: (id) => {
+                openTab({
+                    app: this.app,
+                    doc: {id},
+                });
+            },
+        }));
+        container.replaceChildren(panel);
+    }
+
     private async openDayDetail(dateKey: string) {
         const container = this.getDialogBody();
-        if (!container || this.loadingDay) {
+        if (!container || this.loadingDay || !this.dialog) {
             return;
         }
 
         const heatmapPanel = container.querySelector(".jchm-panel") as HTMLElement | null;
         this.loadingDay = true;
-        // 先保留热力图，等 SQL 完成再一次切换，避免 loading 中间态造成高度抖动
-        heatmapPanel?.classList.add("jchm-panel--loading");
-
+        this.dayAbort?.abort();
+        this.dayAbort = new AbortController();
+        const {signal} = this.dayAbort;
         const i18n = getI18n();
-        try {
-            const docs = await queryDayDocs(dateKey, this.config.statMode);
-            if (!this.dialog) {
+        let switchedToLoading = false;
+
+        const showDayLoading = () => {
+            if (switchedToLoading || signal.aborted || !this.dialog) {
                 return;
             }
-
             if (heatmapPanel) {
-                heatmapPanel.classList.remove("jchm-panel--loading");
                 this.cachedHeatmapPanel = heatmapPanel;
             }
-
+            switchedToLoading = true;
             this.view = "day";
             const panel = document.createElement("div");
             panel.className = "jchm-panel jchm-panel--day";
-            panel.appendChild(renderDayDocList({
+            panel.appendChild(renderDayLoading({
                 dateKey,
-                docs,
                 i18n,
-                onBack: () => {
+                loadingEl: this.createLoadingEl(),
+                onBack: this.bindDayBack(() => {
                     const body = this.getDialogBody();
                     if (body) {
                         this.restoreHeatmapPanel(body);
                     }
-                },
-                onOpenDoc: (id) => {
-                    openTab({
-                        app: this.app,
-                        doc: {id},
-                    });
-                },
+                }),
             }));
             container.replaceChildren(panel);
+        };
+
+        try {
+            const docs = await this.awaitWithLoadingDelay(
+                queryDayDocs(dateKey, this.config.statMode, signal),
+                showDayLoading,
+                signal,
+            );
+            if (signal.aborted || !this.dialog) {
+                return;
+            }
+
+            if (heatmapPanel && !switchedToLoading) {
+                this.cachedHeatmapPanel = heatmapPanel;
+            }
+            this.mountDayDocPanel(container, dateKey, docs);
         } catch (e) {
+            if (this.isAbortError(e) || signal.aborted) {
+                return;
+            }
             console.error(this.displayName, e);
-            heatmapPanel?.classList.remove("jchm-panel--loading");
             showMessage(`${this.displayName}: ${i18n.loadDayFailed}`);
+            if (switchedToLoading) {
+                const body = this.getDialogBody();
+                if (body) {
+                    this.restoreHeatmapPanel(body);
+                }
+            }
         } finally {
+            if (this.dayAbort?.signal === signal) {
+                this.dayAbort = undefined;
+            }
             this.loadingDay = false;
         }
     }

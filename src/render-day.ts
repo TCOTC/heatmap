@@ -11,6 +11,48 @@ export interface RenderDayDocListOptions {
     onOpenDoc: (id: string) => void;
 }
 
+export interface RenderDayLoadingOptions {
+    dateKey: string;
+    i18n: I18n;
+    loadingEl: HTMLElement;
+    onBack: () => void;
+}
+
+/** 日详情 Loading 占位（保留返回与日期标题，避免高度塌缩） */
+export function renderDayLoading(options: RenderDayLoadingOptions): HTMLElement {
+    const {dateKey, i18n, loadingEl, onBack} = options;
+    const root = document.createElement("div");
+    root.className = "jchm-day";
+
+    const header = document.createElement("div");
+    header.className = "jchm-day__header";
+
+    const backBtn = document.createElement("button");
+    backBtn.type = "button";
+    backBtn.className = "jchm-day__back block__icon block__icon--show ariaLabel";
+    backBtn.setAttribute("data-position", "north");
+    backBtn.setAttribute("aria-label", i18n.back);
+    backBtn.innerHTML = `<svg><use xlink:href="#iconLeft"></use></svg>`;
+    backBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onBack();
+    });
+    header.appendChild(backBtn);
+
+    const title = document.createElement("div");
+    title.className = "jchm-day__title";
+    title.textContent = formatDisplayDate(dateKey);
+    header.appendChild(title);
+    root.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "jchm-day__body jchm-day__body--loading";
+    body.appendChild(loadingEl);
+    root.appendChild(body);
+    return root;
+}
+
 /** 渲染某日文档扁平列表（块数降序） */
 export function renderDayDocList(options: RenderDayDocListOptions): HTMLElement {
     const {dateKey, docs, i18n, onBack, onOpenDoc} = options;

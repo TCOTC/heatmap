@@ -26,4 +26,4 @@ export {queryActivity, queryDayDocs, queryEarliestYear} from "./query";
 
 export {renderHeatMap} from "./render-heatmap";
 
-export {renderDayDocList, type RenderDayDocListOptions} from "./render-day";
+export {renderDayDocList, renderDayLoading, type RenderDayDocListOptions, type RenderDayLoadingOptions} from "./render-day";

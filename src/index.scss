@@ -30,6 +30,23 @@
   --jchm-pad-x: 24px;
   --jchm-scrollbar: 10px;
 
+  .jchm-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    /* 略大于纯文案，避免 max-content 弹窗塌成一条细条 */
+    min-width: 320px;
+    min-height: 140px;
+    padding: 24px var(--jchm-pad-x);
+
+    > img {
+      display: block;
+      width: 48px;
+      height: 48px;
+    }
+  }
+
   .jchm-panel {
     flex: 1;
     min-height: 0;
@@ -111,6 +128,20 @@
         padding-right: calc(var(--jchm-pad-x) - var(--jchm-scrollbar));
         box-sizing: border-box;
         scrollbar-gutter: stable;
+
+        &--loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: hidden;
+
+          > .jchm-loading {
+            min-width: 0;
+            width: 100%;
+            padding-left: 0;
+            padding-right: 0;
+          }
+        }
       }
 
       &__empty {
