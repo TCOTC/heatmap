@@ -97,6 +97,9 @@ export default class HeatMap extends Plugin {
     private dayDocsCache = new Map<string, DayDocsResult>();
 
     onload() {
+        // 对齐思源 litheness：symbol + viewBox 24 + stroke currentColor 1.7
+        this.addIcons(`<symbol id="iconJCHMFlame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/></symbol>`);
+
         this.configReady = this.loadData(STORAGE_NAME).then((data) => {
             this.config = this.normalizeConfig(data);
         }).catch(e => {
@@ -114,7 +117,7 @@ export default class HeatMap extends Plugin {
         const i18n = getI18n();
 
         this.addTopBar({
-            icon: "iconCalendar",
+            icon: "iconJCHMFlame",
             title: i18n.openHeatMap,
             position: "left",
             callback: () => {

@@ -4,28 +4,12 @@
   "url": "https://github.com/TCOTC/heatmap",
   "version": "0.1.0",
   "minAppVersion": "3.7.0",
-  "backends": [
-    "windows",
-    "linux",
-    "darwin",
-    "ios",
-    "android",
-    "harmony",
-    "docker",
-    "all"
-  ],
-  "frontends": [
-    "desktop",
-    "mobile",
-    "browser-desktop",
-    "browser-mobile",
-    "desktop-window",
-    "all"
-  ],
-  "disabledInPublish": false,
+  "backends": ["all"],
+  "frontends": ["all"],
+  "disabledInPublish": true,
   "displayName": {
-    "default": "Document Heat Stats",
-    "zh-CN": "文档热力统计"
+    "default": "Document Activity Stats",
+    "zh-CN": "文档活跃统计"
   },
   "description": {
     "default": "Visually display the distribution of notes throughout the year, with heatmap and calendar layouts.",
@@ -35,5 +19,5 @@
     "default": "README.md",
     "zh-CN": "README.zh-CN.md"
   },
-  "funding": { "custom": ["https://mytemos.com/"] }
+  "funding": {"custom": ["https://mytemos.com/"]}
 }

@@ -1,10 +1,10 @@
 import type {WeekStart} from "./types";
 
 const ZH = {
-    openHeatMap: "文档热力统计",
-    heatmapTitle: "文档热力统计",
+    openHeatMap: "文档活跃统计",
+    heatmapTitle: "文档活跃统计",
     loading: "加载中…",
-    loadFailed: "加载文档热力统计失败",
+    loadFailed: "加载失败，请查看开发者工具控制台报错",
     less: "少",
     more: "多",
     totalCount: "共 ${count} 个块",
@@ -27,7 +27,7 @@ const ZH = {
     yearOrder: "年份排序",
     yearOrderNewestFirst: "最近的年份在前",
     yearOrderOldestFirst: "最近的年份在后",
-    viewMode: "展示形式",
+    viewMode: "视图",
     viewModeHeatmap: "热力图",
     viewModeCalendar: "日历",
     statScope: "筛选笔记本",
@@ -51,10 +51,10 @@ const ZH = {
 export type I18n = typeof ZH;
 
 const EN: I18n = {
-    openHeatMap: "Document Heat Stats",
-    heatmapTitle: "Document Heat Stats",
+    openHeatMap: "Document Activity Stats",
+    heatmapTitle: "Document Activity Stats",
     loading: "Loading…",
-    loadFailed: "Failed to load document heat stats",
+    loadFailed: "Load failed. Check the developer tools console for errors",
     less: "Less",
     more: "More",
     totalCount: "${count} blocks in total",
@@ -77,7 +77,7 @@ const EN: I18n = {
     yearOrder: "Year order",
     yearOrderNewestFirst: "Newest years first",
     yearOrderOldestFirst: "Oldest years first",
-    viewMode: "Layout",
+    viewMode: "View",
     viewModeHeatmap: "Heatmap",
     viewModeCalendar: "Calendar",
     statScope: "Filter notebooks",
