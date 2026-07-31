@@ -67,7 +67,7 @@ export function openColorDialog(options: OpenColorDialogOptions): void {
     };
 
     picker.addEventListener("input", () => {
-        setPreview(normalizeHeatColor(picker.value) || picker.value.toLowerCase());
+        setPreview(normalizeHeatColor(picker.value));
     });
 
     resetBtn.addEventListener("click", (event) => {

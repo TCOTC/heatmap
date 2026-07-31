@@ -43,7 +43,7 @@ function renderGithubView(
 
     const root = document.createElement("div");
     root.className = "jchm jchm--heatmap";
-    applyHeatColor(root, color ?? null);
+    applyHeatColor(root, color);
 
     const visibleWeekdayLabels = weekdayLabels.filter((_, index) => isSparseWeekday(index, weekStart));
     root.style.setProperty("--jchm-weekday-col", `${measureWeekdayColumnWidth(visibleWeekdayLabels)}px`);

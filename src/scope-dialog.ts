@@ -37,9 +37,6 @@ export function openScopeDialog(options: OpenScopeDialogOptions): void {
             if (openDialog === dialog) {
                 openDialog = undefined;
             }
-            if (!handled) {
-                // 点关闭图标等同取消，不写配置
-            }
         },
     });
     openDialog = dialog;
@@ -193,19 +190,11 @@ export function openScopeDialog(options: OpenScopeDialogOptions): void {
 
 async function listNotebooks(): Promise<ScopeNotebook[]> {
     const response = await fetchSyncPost("/api/notebook/lsNotebooks", {});
-    let raw: unknown[] = [];
-    if (response.code === 0 && response.data && typeof response.data === "object") {
-        const notebooks = (response.data as {notebooks?: unknown;}).notebooks;
-        if (Array.isArray(notebooks)) {
-            raw = notebooks;
-        }
+    if (response.code !== 0 || !response.data || typeof response.data !== "object") {
+        throw new Error(response.msg || "lsNotebooks failed");
     }
-    if (raw.length === 0) {
-        const fallback = (window as any).siyuan?.notebooks;
-        if (Array.isArray(fallback)) {
-            raw = fallback;
-        }
-    }
+    const notebooks = (response.data as {notebooks?: unknown;}).notebooks;
+    const raw = Array.isArray(notebooks) ? notebooks : [];
     return raw.map(normalizeNotebook).filter((nb): nb is ScopeNotebook => nb != null);
 }
 
@@ -236,12 +225,8 @@ function createLoadingEl(i18n: I18n): HTMLElement {
 }
 
 function getDefaultNotebookIcon(): string {
-    try {
-        const images = (window as any).siyuan?.storage?.["local-images"];
-        return String(images?.note || "1f5c3");
-    } catch {
-        return "1f5c3";
-    }
+    const images = (window as any).siyuan?.storage?.["local-images"];
+    return String(images?.note || "1f5c3");
 }
 
 function escapeHtml(text: string): string {

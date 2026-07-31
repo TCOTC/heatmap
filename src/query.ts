@@ -253,7 +253,7 @@ function sqlLimitForDateRange(startKey: string, endKeyExclusive: string): number
     const start = parseLocalDateKey(startKey.slice(0, 8));
     const end = parseLocalDateKey(endKeyExclusive.slice(0, 8));
     if (!start || !end) {
-        return DAY_DOCS_SQL_LIMIT;
+        throw new Error(`invalid date range for sql limit: ${startKey}..${endKeyExclusive}`);
     }
     const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
     return Math.max(1, days);

@@ -240,9 +240,6 @@ function buildCalendarYearGrid(
     let end = new Date(year, 11, 31);
     if (year === today.getFullYear() && end > today) {
         end = today;
-    } else if (year > today.getFullYear()) {
-        // 未来年：仍渲染空网格到年底，便于设置里预选
-        end = new Date(year, 11, 31);
     }
 
     // 起始对齐后可能落到上一年，格子只统计本年内的 count，跨年占位用 empty

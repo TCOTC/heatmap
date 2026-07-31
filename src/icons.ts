@@ -92,12 +92,8 @@ function decodeIconAmp(value: string): string {
 }
 
 function getDefaultFileIcon(): string {
-    try {
-        const images = (window as any).siyuan?.storage?.["local-images"];
-        return String(images?.file || "");
-    } catch {
-        return "";
-    }
+    const images = (window as any).siyuan?.storage?.["local-images"];
+    return String(images?.file || "");
 }
 
 function unicodeToEmoji(unicode: string): string {

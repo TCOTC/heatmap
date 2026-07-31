@@ -30,7 +30,7 @@ export function renderCalendarView(
 
     const root = document.createElement("div");
     root.className = "jchm jchm--calendar";
-    applyHeatColor(root, color ?? null);
+    applyHeatColor(root, color);
 
     const scrollY = document.createElement("div");
     scrollY.className = "jchm__scroll";
@@ -122,11 +122,11 @@ function renderMonthBlock(
                 day.className = "jchm__cal-day jchm__cal-day--empty";
             } else if (cell.count === -2) {
                 day.className = "jchm__cal-day jchm__cal-day--future";
-                day.textContent = String(cell.day || Number(cell.date.slice(6, 8)));
+                day.textContent = String(cell.day);
             } else {
                 const level = cell.count <= 0 ? 0 : levels(cell.count);
                 day.className = `jchm__cal-day jchm__cell jchm__cell--l${level} ariaLabel`;
-                day.textContent = String(cell.day || Number(cell.date.slice(6, 8)));
+                day.textContent = String(cell.day);
                 day.setAttribute("data-position", "north");
                 day.setAttribute("data-date", cell.date);
                 day.setAttribute("data-count", String(cell.count));
