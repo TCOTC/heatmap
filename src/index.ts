@@ -9,6 +9,7 @@ import {
     buildYearOptions,
     isDisplayMode,
     isStatMode,
+    isViewMode,
     isWeekStart,
     isYearOrder,
     normalizeFromYear,
@@ -18,6 +19,7 @@ import {
     renderHeatMap,
     type DisplayMode,
     type StatMode,
+    type ViewMode,
     type WeekStart,
     type YearOrder,
 } from "./heatmap";
@@ -31,6 +33,7 @@ interface PluginConfig {
     displayMode: DisplayMode;
     fromYear: number | null;
     yearOrder: YearOrder;
+    viewMode: ViewMode;
 }
 
 export default class HeatMap extends Plugin {
@@ -42,6 +45,7 @@ export default class HeatMap extends Plugin {
         displayMode: "recent",
         fromYear: null,
         yearOrder: "newestFirst",
+        viewMode: "heatmap",
     };
     private refreshing = false;
 
@@ -111,6 +115,7 @@ export default class HeatMap extends Plugin {
             displayMode,
             fromYear: displayMode === "years" ? fromYear : null,
             yearOrder: isYearOrder(raw.yearOrder) ? raw.yearOrder : "newestFirst",
+            viewMode: isViewMode(raw.viewMode) ? raw.viewMode : "heatmap",
         };
     }
 
@@ -135,6 +140,7 @@ export default class HeatMap extends Plugin {
         this.dialog = new Dialog({
             title: i18n.heatmapTitle,
             content: content.outerHTML,
+            width: "max-content",
             destroyCallback: () => {
                 this.dialog = undefined;
             },
@@ -150,60 +156,6 @@ export default class HeatMap extends Plugin {
 
         this.mountSettingsButton(this.dialog.element);
         await this.renderPanel(container);
-        this.fitDialogToViewport();
-    }
-
-    /** 按当前 top/视口调整 maxHeight，必要时上移，避免多年份内容向下溢出 */
-    private fitDialogToViewport() {
-        const el = this.dialog?.element.querySelector(".b3-dialog__container") as HTMLElement | null;
-        if (!el) {
-            return;
-        }
-
-        const margin = 16;
-        requestAnimationFrame(() => {
-            if (!this.dialog) {
-                return;
-            }
-
-            const maxAllowed = Math.max(160, window.innerHeight - 2 * margin);
-            // 用户已拖拽出固定高度时保留，只更新上限
-            const userSized = !!el.style.height && el.style.height !== "auto";
-
-            if (!userSized) {
-                el.style.maxHeight = "none";
-                el.style.height = "auto";
-                const contentH = el.offsetHeight;
-                const targetH = Math.min(contentH, maxAllowed);
-
-                const pinned = el.style.left !== "" && el.style.left !== "auto";
-                if (pinned) {
-                    let top = parseFloat(el.style.top);
-                    if (!Number.isFinite(top)) {
-                        top = el.getBoundingClientRect().top;
-                    }
-                    if (top + targetH + margin > window.innerHeight) {
-                        top = Math.max(margin, window.innerHeight - margin - targetH);
-                        el.style.top = `${top}px`;
-                    }
-                    el.style.maxHeight = `${Math.max(160, window.innerHeight - top - margin)}px`;
-                } else {
-                    el.style.maxHeight = `${maxAllowed}px`;
-                }
-                el.style.height = "auto";
-            } else {
-                const pinned = el.style.left !== "" && el.style.left !== "auto";
-                if (pinned) {
-                    let top = parseFloat(el.style.top);
-                    if (!Number.isFinite(top)) {
-                        top = el.getBoundingClientRect().top;
-                    }
-                    el.style.maxHeight = `${Math.max(160, window.innerHeight - top - margin)}px`;
-                } else {
-                    el.style.maxHeight = `${maxAllowed}px`;
-                }
-            }
-        });
     }
 
     private mountSettingsButton(dialogEl: HTMLElement) {
@@ -294,7 +246,6 @@ export default class HeatMap extends Plugin {
                 return;
             }
             chartHost.replaceChildren(renderHeatMap(days, i18n, this.config));
-            this.fitDialogToViewport();
         } catch (e) {
             console.error(this.displayName, e);
             if (!this.dialog) {
@@ -302,7 +253,6 @@ export default class HeatMap extends Plugin {
             }
             chartHost.textContent = i18n.loadFailed;
             showMessage(`${this.displayName}: ${i18n.loadFailed}`);
-            this.fitDialogToViewport();
         } finally {
             this.refreshing = false;
         }
