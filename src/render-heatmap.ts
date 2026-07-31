@@ -1,0 +1,154 @@
+import {formatDisplayDate, isSparseWeekday, orderWeekdays} from "./date";
+import {buildMonthLabels, buildPeriods, measureWeekdayColumnWidth, type PeriodGrid} from "./grid";
+import type {I18n} from "./i18n";
+import {calcLevels} from "./levels";
+import {renderCalendarView} from "./render-calendar";
+import {renderFooter} from "./render-shared";
+import type {DayCount, HeatMapConfigOptions, WeekStart} from "./types";
+
+/** 渲染热力图图表区域（GitHub 周列 / 传统月历） */
+export function renderHeatMap(
+    days: DayCount[],
+    i18n: I18n,
+    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "viewMode">,
+    onDayClick?: (dateKey: string, count: number) => void,
+): HTMLElement {
+    if (config.viewMode === "calendar") {
+        return renderCalendarView(days, i18n, config, onDayClick);
+    }
+    return renderGithubView(days, i18n, config, onDayClick);
+}
+
+/** 渲染 GitHub 风格热力图 */
+function renderGithubView(
+    days: DayCount[],
+    i18n: I18n,
+    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder">,
+    onDayClick?: (dateKey: string, count: number) => void,
+): HTMLElement {
+    const {weekStart, displayMode, fromYear, yearOrder} = config;
+    const countMap = new Map(days.map((d) => [d.date, d.count]));
+    const periods = buildPeriods(countMap, displayMode, fromYear, weekStart, yearOrder);
+
+    const allCounts: number[] = [];
+    for (const period of periods) {
+        for (const cell of period.cells) {
+            allCounts.push(cell.count);
+        }
+    }
+    const {levelOf, thresholds} = calcLevels(allCounts);
+    const total = allCounts.reduce((sum: number, c: number) => sum + c, 0);
+    const weekdayLabels = orderWeekdays(i18n.weekdays, weekStart);
+
+    const root = document.createElement("div");
+    root.className = "jchm jchm--heatmap";
+
+    const visibleWeekdayLabels = weekdayLabels.filter((_, index) => isSparseWeekday(index, weekStart));
+    root.style.setProperty("--jchm-weekday-col", `${measureWeekdayColumnWidth(visibleWeekdayLabels)}px`);
+
+    // 外层竖滚、内层横滚拆开，避免双轴 overflow:auto 互相挤出无效滚动条
+    const scrollY = document.createElement("div");
+    scrollY.className = "jchm__scroll";
+
+    const scrollX = document.createElement("div");
+    scrollX.className = "jchm__scroll-x";
+
+    const track = document.createElement("div");
+    track.className = "jchm__track";
+
+    let maxWeeks = 0;
+    for (const period of periods) {
+        maxWeeks = Math.max(maxWeeks, period.weeks.length);
+        track.appendChild(renderPeriod(period, i18n, weekdayLabels, weekStart, levelOf, onDayClick));
+    }
+    // 供 CSS clamp 计算格子边长（最宽年份的周数）
+    root.style.setProperty("--jchm-weeks", String(Math.max(maxWeeks, 1)));
+
+    scrollX.appendChild(track);
+    scrollY.appendChild(scrollX);
+    root.appendChild(scrollY);
+    root.appendChild(renderFooter(i18n, total, thresholds));
+
+    // 若已缩到下限仍溢出，滚到最右侧展示最近日期
+    requestAnimationFrame(() => {
+        scrollX.scrollLeft = scrollX.scrollWidth;
+    });
+
+    return root;
+}
+
+function renderPeriod(
+    period: PeriodGrid,
+    i18n: I18n,
+    weekdayLabels: string[],
+    weekStart: WeekStart,
+    levels: (count: number) => number,
+    onDayClick?: (dateKey: string, count: number) => void,
+): HTMLElement {
+    const section = document.createElement("div");
+    section.className = "jchm__period";
+
+    const monthsRow = document.createElement("div");
+    monthsRow.className = "jchm__months";
+    const spacer = document.createElement("div");
+    spacer.className = "jchm__months-spacer";
+    monthsRow.appendChild(spacer);
+    for (const label of buildMonthLabels(period.weeks, i18n.months)) {
+        const el = document.createElement("div");
+        el.className = "jchm__month";
+        el.textContent = label;
+        monthsRow.appendChild(el);
+    }
+    section.appendChild(monthsRow);
+
+    const body = document.createElement("div");
+    body.className = "jchm__body";
+
+    const weekdays = document.createElement("div");
+    weekdays.className = "jchm__weekdays";
+    weekdayLabels.forEach((label, index) => {
+        const el = document.createElement("div");
+        el.className = "jchm__weekday";
+        // 只显示一、三、五，避免拥挤
+        if (isSparseWeekday(index, weekStart)) {
+            el.textContent = label;
+        }
+        weekdays.appendChild(el);
+    });
+    body.appendChild(weekdays);
+
+    const grid = document.createElement("div");
+    grid.className = "jchm__grid";
+    for (const week of period.weeks) {
+        const col = document.createElement("div");
+        col.className = "jchm__week";
+        for (const cell of week) {
+            const day = document.createElement("div");
+            if (cell.count < 0) {
+                day.className = "jchm__cell jchm__cell--empty";
+            } else {
+                const level = cell.count <= 0 ? 0 : levels(cell.count);
+                day.className = `jchm__cell jchm__cell--l${level} ariaLabel`;
+                day.setAttribute("data-position", "north");
+                day.setAttribute("data-date", cell.date);
+                day.setAttribute("data-count", String(cell.count));
+                day.setAttribute("aria-label", i18n.cellTooltip
+                    .replace("${date}", formatDisplayDate(cell.date))
+                    .replace("${count}", String(cell.count)));
+                if (cell.count > 0 && onDayClick) {
+                    day.classList.add("jchm__cell--clickable");
+                    day.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onDayClick(cell.date, cell.count);
+                    });
+                }
+            }
+            col.appendChild(day);
+        }
+        grid.appendChild(col);
+    }
+    body.appendChild(grid);
+    section.appendChild(body);
+    return section;
+}
