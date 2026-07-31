@@ -1,6 +1,7 @@
 export type {
     DayCount,
     DayDoc,
+    DayDocsResult,
     DisplayMode,
     HeatMapConfigOptions,
     ScopeNotebook,
@@ -26,7 +27,7 @@ export {
 
 export {openScopeDialog, type OpenScopeDialogOptions} from "./scope-dialog";
 
-export {buildBoxFilter, queryActivity, queryDayDocs, queryEarliestYear} from "./query";
+export {buildBoxFilter, DAY_DOCS_LIMIT, queryActivity, queryDayDocs, queryEarliestYear} from "./query";
 
 export {renderHeatMap} from "./render-heatmap";
 

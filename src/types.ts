@@ -28,6 +28,12 @@ export interface DayDoc {
     count: number;
 }
 
+/** 单日文档查询结果；truncated 表示实际超过展示上限 */
+export interface DayDocsResult {
+    docs: DayDoc[];
+    truncated: boolean;
+}
+
 export interface HeatMapConfigOptions {
     statMode: StatMode;
     weekStart: WeekStart;

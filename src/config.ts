@@ -58,10 +58,41 @@ export interface OpenConfigMenuOptions {
     onOpenScope: () => void;
 }
 
-/** 弹出配置菜单（统计方式、显示范围、年份排序、每周第一天、展示形式、统计范围） */
+/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、统计范围） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
     const {i18n, config, yearOptions, rect, isMobile, onChange, onOpenScope} = options;
     const menu = new Menu("heatmap-config");
+
+    menu.addItem({
+        id: "heatmap-view-mode",
+        label: i18n.viewMode,
+        iconHTML: "",
+        type: "submenu",
+        submenu: [
+            {
+                id: "heatmap-view-heatmap",
+                label: i18n.viewModeHeatmap,
+                iconHTML: "",
+                checked: config.viewMode === "heatmap",
+                click: () => {
+                    if (config.viewMode !== "heatmap") {
+                        onChange({viewMode: "heatmap"});
+                    }
+                },
+            },
+            {
+                id: "heatmap-view-calendar",
+                label: i18n.viewModeCalendar,
+                iconHTML: "",
+                checked: config.viewMode === "calendar",
+                click: () => {
+                    if (config.viewMode !== "calendar") {
+                        onChange({viewMode: "calendar"});
+                    }
+                },
+            },
+        ],
+    });
 
     menu.addItem({
         id: "heatmap-stat-mode",
@@ -197,37 +228,6 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 click: () => {
                     if (config.weekStart !== "sunday") {
                         onChange({weekStart: "sunday"});
-                    }
-                },
-            },
-        ],
-    });
-
-    menu.addItem({
-        id: "heatmap-view-mode",
-        label: i18n.viewMode,
-        iconHTML: "",
-        type: "submenu",
-        submenu: [
-            {
-                id: "heatmap-view-heatmap",
-                label: i18n.viewModeHeatmap,
-                iconHTML: "",
-                checked: config.viewMode === "heatmap",
-                click: () => {
-                    if (config.viewMode !== "heatmap") {
-                        onChange({viewMode: "heatmap"});
-                    }
-                },
-            },
-            {
-                id: "heatmap-view-calendar",
-                label: i18n.viewModeCalendar,
-                iconHTML: "",
-                checked: config.viewMode === "calendar",
-                click: () => {
-                    if (config.viewMode !== "calendar") {
-                        onChange({viewMode: "calendar"});
                     }
                 },
             },

@@ -1,12 +1,14 @@
 import {fetchSyncPost} from "siyuan";
 import {alignToWeekStart, formatDateKey} from "./date";
-import type {DayCount, DayDoc, HeatMapConfigOptions, StatMode} from "./types";
+import type {DayCount, DayDoc, DayDocsResult, HeatMapConfigOptions, StatMode} from "./types";
 
 /** 容器块：文档 / 列表 / 列表项 / 引述 / 超级块 / 标注 */
 const CONTAINER_TYPES = "('d', 'l', 'i', 'b', 's', 'callout')";
 
-/** 避免被思源 /api/query/sql 默认 LIMIT（搜索 Limit，常为 64）截断 */
-const SQL_LIMIT = 5000;
+/** 单日文档列表展示上限 */
+export const DAY_DOCS_LIMIT = 100;
+/** 多查 1 条用于判断是否截断；显式 LIMIT 避免被思源默认搜索 Limit（常为 64）截断 */
+const DAY_DOCS_SQL_LIMIT = DAY_DOCS_LIMIT + 1;
 
 type BoxScope = Pick<HeatMapConfigOptions, "includedBoxIds">;
 
@@ -58,6 +60,7 @@ export async function queryActivity(
     signal?: AbortSignal,
 ): Promise<DayCount[]> {
     const {startKey, endKeyExclusive} = getQueryBounds(config);
+    const sqlLimit = sqlLimitForDateRange(startKey, endKeyExclusive);
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
     const boxFilter = buildBoxFilter(config.includedBoxIds);
     let sql: string;
@@ -71,7 +74,7 @@ WHERE ${leafFilter}${boxFilter}
   AND updated < '${endKeyExclusive}'
 GROUP BY SUBSTR(updated, 1, 8)
 ORDER BY date ASC
-LIMIT ${SQL_LIMIT}`;
+LIMIT ${sqlLimit}`;
     } else if (mode === "mixed") {
         sql = `SELECT date, COUNT(*) AS count FROM (
   SELECT SUBSTR(created, 1, 8) AS date, id FROM blocks
@@ -87,7 +90,7 @@ LIMIT ${SQL_LIMIT}`;
 )
 GROUP BY date
 ORDER BY date ASC
-LIMIT ${SQL_LIMIT}`;
+LIMIT ${sqlLimit}`;
     } else {
         sql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count
 FROM blocks
@@ -96,7 +99,7 @@ WHERE ${leafFilter}${boxFilter}
   AND created < '${endKeyExclusive}'
 GROUP BY SUBSTR(created, 1, 8)
 ORDER BY date ASC
-LIMIT ${SQL_LIMIT}`;
+LIMIT ${sqlLimit}`;
     }
 
     const rows = await execSql(sql, signal);
@@ -112,9 +115,9 @@ export async function queryDayDocs(
     mode: StatMode = "created",
     scope: BoxScope = {includedBoxIds: null},
     signal?: AbortSignal,
-): Promise<DayDoc[]> {
+): Promise<DayDocsResult> {
     if (!/^\d{8}$/.test(dateKey)) {
-        return [];
+        return {docs: [], truncated: false};
     }
     const startKey = `${dateKey}000000`;
     const endKeyExclusive = `${nextDateKey(dateKey)}000000`;
@@ -157,7 +160,7 @@ GROUP BY root_id`;
 FROM (${aggSql}) AS agg
 LEFT JOIN blocks d ON d.id = agg.id AND d.type = 'd'
 ORDER BY agg.count DESC, d.content ASC, agg.id ASC
-LIMIT ${SQL_LIMIT}`;
+LIMIT ${DAY_DOCS_SQL_LIMIT}`;
 
     const rows = await execSql(sql, signal);
     const docs: DayDoc[] = [];
@@ -173,7 +176,11 @@ LIMIT ${SQL_LIMIT}`;
             count: Number(row.count) || 0,
         });
     }
-    return docs;
+    const truncated = docs.length > DAY_DOCS_LIMIT;
+    if (truncated) {
+        docs.length = DAY_DOCS_LIMIT;
+    }
+    return {docs, truncated};
 }
 
 /**
@@ -239,6 +246,31 @@ async function execSql(
         throw new Error(response.msg || "sql query failed");
     }
     return response.data as Array<Record<string, unknown>>;
+}
+
+/** 按区间日历天数设 LIMIT：盖住「每天都有活动」的最坏情况，并避开思源默认截断 */
+function sqlLimitForDateRange(startKey: string, endKeyExclusive: string): number {
+    const start = parseLocalDateKey(startKey.slice(0, 8));
+    const end = parseLocalDateKey(endKeyExclusive.slice(0, 8));
+    if (!start || !end) {
+        return DAY_DOCS_SQL_LIMIT;
+    }
+    const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+    return Math.max(1, days);
+}
+
+function parseLocalDateKey(dateKey: string): Date | null {
+    if (!/^\d{8}$/.test(dateKey)) {
+        return null;
+    }
+    const y = Number(dateKey.slice(0, 4));
+    const m = Number(dateKey.slice(4, 6)) - 1;
+    const d = Number(dateKey.slice(6, 8));
+    const date = new Date(y, m, d);
+    if (date.getFullYear() !== y || date.getMonth() !== m || date.getDate() !== d) {
+        return null;
+    }
+    return date;
 }
 
 function getQueryBounds(

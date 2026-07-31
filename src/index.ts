@@ -485,7 +485,12 @@ export default class HeatMap extends Plugin {
         };
     }
 
-    private mountDayDocPanel(container: HTMLElement, dateKey: string, docs: DayDoc[]) {
+    private mountDayDocPanel(
+        container: HTMLElement,
+        dateKey: string,
+        docs: DayDoc[],
+        truncated: boolean,
+    ) {
         const i18n = getI18n();
         this.view = "day";
         const panel = document.createElement("div");
@@ -493,6 +498,7 @@ export default class HeatMap extends Plugin {
         panel.appendChild(renderDayDocList({
             dateKey,
             docs,
+            truncated,
             i18n,
             onBack: this.bindDayBack(() => {
                 const body = this.getDialogBody();
@@ -550,7 +556,7 @@ export default class HeatMap extends Plugin {
         };
 
         try {
-            const docs = await this.awaitWithLoadingDelay(
+            const {docs, truncated} = await this.awaitWithLoadingDelay(
                 queryDayDocs(
                     dateKey,
                     this.config.statMode,
@@ -567,7 +573,7 @@ export default class HeatMap extends Plugin {
             if (heatmapPanel && !switchedToLoading) {
                 this.cachedHeatmapPanel = heatmapPanel;
             }
-            this.mountDayDocPanel(container, dateKey, docs);
+            this.mountDayDocPanel(container, dateKey, docs, truncated);
         } catch (e) {
             if (this.isAbortError(e) || signal.aborted) {
                 return;

@@ -33,10 +33,10 @@ describe("queryDayDocs", () => {
             return {code: 0, msg: "", data: []};
         };
 
-        assert.deepEqual(await queryDayDocs(""), []);
-        assert.deepEqual(await queryDayDocs("2024-01-01"), []);
-        assert.deepEqual(await queryDayDocs("2024010"), []);
-        assert.deepEqual(await queryDayDocs("abcdefgh"), []);
+        assert.deepEqual(await queryDayDocs(""), {docs: [], truncated: false});
+        assert.deepEqual(await queryDayDocs("2024-01-01"), {docs: [], truncated: false});
+        assert.deepEqual(await queryDayDocs("2024010"), {docs: [], truncated: false});
+        assert.deepEqual(await queryDayDocs("abcdefgh"), {docs: [], truncated: false});
         assert.equal(calls, 0);
     });
 
@@ -55,13 +55,36 @@ describe("queryDayDocs", () => {
             };
         };
 
-        const docs = await queryDayDocs("20240115", "created");
+        const result = await queryDayDocs("20240115", "created");
         assert.ok(stmt.includes("20240115000000"));
         assert.ok(stmt.includes("20240116000000"));
-        assert.deepEqual(docs, [
-            {id: "doc-a", title: "Alpha", icon: "1f4c4", count: 3},
-            {id: "doc-b", title: "doc-b", icon: "", count: 1},
-        ]);
+        assert.ok(stmt.includes("LIMIT 101"));
+        assert.deepEqual(result, {
+            truncated: false,
+            docs: [
+                {id: "doc-a", title: "Alpha", icon: "1f4c4", count: 3},
+                {id: "doc-b", title: "doc-b", icon: "", count: 1},
+            ],
+        });
+    });
+
+    it("超过 100 篇时截断并标记 truncated", async () => {
+        stub().fetchSyncPost = async () => ({
+            code: 0,
+            msg: "",
+            data: Array.from({length: 101}, (_, i) => ({
+                id: `doc-${i}`,
+                count: 101 - i,
+                content: `Doc ${i}`,
+                ial: "",
+            })),
+        });
+
+        const result = await queryDayDocs("20240115", "created");
+        assert.equal(result.truncated, true);
+        assert.equal(result.docs.length, 100);
+        assert.equal(result.docs[0].id, "doc-0");
+        assert.equal(result.docs[99].id, "doc-99");
     });
 });
 
@@ -141,6 +164,10 @@ describe("queryActivity", () => {
         assert.ok(stmt.includes("20240101000000"));
         const currentYear = new Date().getFullYear();
         assert.ok(stmt.includes(`${currentYear + 1}0101000000`));
+        const start = new Date(2024, 0, 1);
+        const end = new Date(currentYear + 1, 0, 1);
+        const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
+        assert.ok(stmt.includes(`LIMIT ${days}`));
     });
 
     it("白名单笔记本时 SQL 含 box IN", async () => {

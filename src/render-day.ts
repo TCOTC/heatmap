@@ -6,6 +6,8 @@ import type {DayDoc} from "./types";
 export interface RenderDayDocListOptions {
     dateKey: string;
     docs: DayDoc[];
+    /** 实际文档数超过展示上限时，在列表末尾提示 */
+    truncated?: boolean;
     i18n: I18n;
     onBack: () => void;
     onOpenDoc: (id: string) => void;
@@ -55,7 +57,7 @@ export function renderDayLoading(options: RenderDayLoadingOptions): HTMLElement 
 
 /** 渲染某日文档扁平列表（块数降序） */
 export function renderDayDocList(options: RenderDayDocListOptions): HTMLElement {
-    const {dateKey, docs, i18n, onBack, onOpenDoc} = options;
+    const {dateKey, docs, truncated = false, i18n, onBack, onOpenDoc} = options;
     const root = document.createElement("div");
     root.className = "jchm-day";
 
@@ -104,6 +106,12 @@ export function renderDayDocList(options: RenderDayDocListOptions): HTMLElement 
             list.appendChild(renderDayDocItem(doc, i18n, onOpenDoc));
         }
         body.appendChild(list);
+        if (truncated) {
+            const tip = document.createElement("div");
+            tip.className = "jchm-day__truncated";
+            tip.textContent = i18n.dayDocsTruncated.replace("${count}", String(docs.length));
+            body.appendChild(tip);
+        }
     }
     root.appendChild(body);
     return root;
