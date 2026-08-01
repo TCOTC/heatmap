@@ -225,29 +225,45 @@
 
       /*
        * 热力图自适应：
-       * 1) 先按 11px 格子写死固有宽，供 max-content 弹窗（避免被压成窄条）
-       * 2) 再在已有定宽的 scroll 上建容器，用 cqw 算 cell（cqw 在定义处解析成 px 再继承）
+       * 1) width:100% + min-width:0 — 随弹窗拉宽/压窄；缩到 cell 下限仍溢出时由 scroll-x 出横条
+       * 2) ::before 按 11px 格子给出固有宽，供 max-content 弹窗首开（height:0 不占位；gap 改由 footer margin）
+       * 3) 在已定宽的 scroll 上建容器，用 cqw 算 cell（下限 7px，随容器变大可超过 11px）
        * 不可把 container-type 建在“靠内容撑宽”的节点上，否则 inline-size 遏制会压扁弹窗。
+       * 不可用 min-width:max(100%, 固有宽)：父级更窄时会抬高 max-width，根节点撑出后被裁切且无滚动条。
        */
       &--heatmap {
         flex: 1 1 auto;
         box-sizing: border-box;
-        /* 24px * 2 padding + 星期列 + 周数 * (11px cell + 3px gap) */
-        width: calc(48px + var(--jchm-weekday-col, 18px) + var(--jchm-weeks, 53) * 14px);
-        max-width: 100%;
+        width: 100%;
         min-width: 0;
+        gap: 0;
+
+        /* 24px * 2 padding + 星期列 + 周数 * (11px cell + 3px gap) */
+        &::before {
+          content: "";
+          display: block;
+          height: 0;
+          overflow: hidden;
+          width: calc(48px + var(--jchm-weekday-col, 18px) + var(--jchm-weeks, 53) * 14px);
+        }
 
         .jchm__scroll {
           container-type: inline-size;
         }
 
         .jchm__scroll-x {
-          --jchm-cell: clamp(
+          box-sizing: border-box;
+          width: 100%;
+          min-width: 0;
+          --jchm-cell: max(
             7px,
-            calc((100cqw - var(--jchm-weekday-col, 18px)) * 11 / (var(--jchm-weeks, 53) * 14)),
-            11px
+            calc((100cqw - var(--jchm-weekday-col, 18px)) * 11 / (var(--jchm-weeks, 53) * 14))
           );
           --jchm-gap: calc(var(--jchm-cell) * 3 / 11);
+        }
+
+        .jchm__footer {
+          margin-top: 12px;
         }
       }
 
@@ -374,18 +390,30 @@
         }
       }
 
-      /* 传统日历：固定 2/3/6/12 列（容器查询），避免 auto-fit 折叠空列导致末行月块被拉宽 */
+      /* 传统日历：固定 1/2/3/6/12 列（容器查询），避免 auto-fit 折叠空列导致末行月块被拉宽 */
       &--calendar {
         flex: 1 1 auto;
         box-sizing: border-box;
         /*
-         * 与热力图同理：固有宽建在日历根上（含左右 padding），
+         * 与热力图同理：width:100% 随弹窗伸缩；::before 给出 6 列固有宽供 max-content 首开；
          * container-type 只建在已定宽的 scroll 上，避免 inline-size 遏制压扁弹窗。
          * 1004 = 6×154 + 5×16（满行 6 列）
          */
-        width: calc(1004px + 2 * var(--jchm-pad-x, 24px));
-        max-width: 100%;
+        width: 100%;
         min-width: 0;
+        gap: 0;
+
+        &::before {
+          content: "";
+          display: block;
+          height: 0;
+          overflow: hidden;
+          width: calc(1004px + 2 * var(--jchm-pad-x, 24px));
+        }
+
+        .jchm__footer {
+          margin-top: 12px;
+        }
 
         .jchm__scroll {
           overflow-x: hidden;
@@ -420,11 +448,17 @@
           gap: 12px 16px;
           width: 100%;
           min-width: 0;
-          /* 默认 2 列；更宽时见下方 @container */
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          /* 默认 1 列；更宽时见下方 @container */
+          grid-template-columns: minmax(0, 1fr);
         }
 
         /* 阈值按 scroll 内容区宽度（已扣除 padding）；≈ n×154px + (n-1)×16px */
+        @container jchm-cal (min-width: 324px) {
+          .jchm__cal-months {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
         @container jchm-cal (min-width: 494px) {
           .jchm__cal-months {
             grid-template-columns: repeat(3, minmax(0, 1fr));
