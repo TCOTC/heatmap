@@ -15,8 +15,12 @@ export type {
 
 export {
     applyHeatColor,
+    buildDisplayRangeOptions,
     buildYearOptions,
+    displayRangeOptionToPatch,
     expandYearRange,
+    getDisplayRangeIndex,
+    getDisplayRangeLabel,
     isDisplayMode,
     isLevelMode,
     isStatMode,
@@ -28,6 +32,7 @@ export {
     normalizeIncludedBoxIds,
     normalizeLevelCuts,
     openConfigMenu,
+    type DisplayRangeOption,
     type OpenConfigMenuOptions,
 } from "./config";
 

@@ -11,9 +11,13 @@ import {
     getI18n,
 } from "./i18n";
 import {
-    buildYearOptions,
     applyHeatColor,
+    buildDisplayRangeOptions,
+    buildYearOptions,
+    displayRangeOptionToPatch,
     getActivityCacheKey,
+    getDisplayRangeIndex,
+    getDisplayRangeLabel,
     isDisplayMode,
     isLevelMode,
     isStatMode,
@@ -96,6 +100,10 @@ export default class HeatMap extends Plugin {
     private view: "heatmap" | "day" = "heatmap";
     /** 进入日详情前暂存热力图面板，返回时直接还原，避免重复 SQL */
     private cachedHeatmapPanel: HTMLElement | null = null;
+    /** 标题栏显示范围可选起始年（含库内最早年查询结果） */
+    private rangeNavYearOptions: number[] = [];
+    /** 监听弹窗宽度：过窄时隐藏标题，更窄时收起范围文案只留箭头 */
+    private titleVisibilityObserver?: ResizeObserver;
     /** 打开统计面板时的请求；关闭弹窗或重复打开前 abort */
     private openAbort?: AbortController;
     /** 日详情请求；关闭弹窗 / 返回热力图时 abort */
@@ -338,6 +346,8 @@ export default class HeatMap extends Plugin {
             content: content.outerHTML,
             width: "max-content",
             destroyCallback: () => {
+                this.titleVisibilityObserver?.disconnect();
+                this.titleVisibilityObserver = undefined;
                 this.abortAllLoads();
                 this.dialog = undefined;
                 this.view = "heatmap";
@@ -354,7 +364,234 @@ export default class HeatMap extends Plugin {
         }
         this.dialog.element.querySelector(".b3-dialog")?.classList.add("jchm-dialog-host");
         this.dialog.element.querySelector(".b3-dialog__container")?.classList.add("jchm-dialog__container");
+        this.mountRangeNavigator(this.dialog.element);
         this.mountSettingsButton(this.dialog.element);
+        this.bindHeaderLayout(this.dialog.element);
+        void this.refreshRangeNavigatorYears();
+    }
+
+    /** 在弹窗标题栏居中挂载「< 范围 >」切换，左侧保留原标题 */
+    private mountRangeNavigator(dialogEl: HTMLElement) {
+        const header = dialogEl.querySelector(".b3-dialog__header") as HTMLElement | null;
+        if (!header || header.querySelector(".jchm-range-nav")) {
+            return;
+        }
+
+        const i18n = getI18n();
+        header.classList.add("jchm-dialog__header");
+
+        const title = document.createElement("span");
+        title.className = "jchm-dialog__title";
+        title.textContent = i18n.heatmapTitle;
+
+        const nav = document.createElement("div");
+        nav.className = "jchm-range-nav";
+        nav.setAttribute("role", "group");
+        nav.setAttribute("aria-label", i18n.displayRange);
+
+        const prev = document.createElement("button");
+        prev.type = "button";
+        prev.className = "jchm-range-nav__btn block__icon block__icon--show";
+        prev.setAttribute("aria-label", "<");
+        prev.innerHTML = "<svg><use xlink:href=\"#iconLeft\"></use></svg>";
+
+        const label = document.createElement("span");
+        label.className = "jchm-range-nav__label";
+
+        const next = document.createElement("button");
+        next.type = "button";
+        next.className = "jchm-range-nav__btn block__icon block__icon--show";
+        next.setAttribute("aria-label", ">");
+        next.innerHTML = "<svg><use xlink:href=\"#iconRight\"></use></svg>";
+
+        const stopDrag = (event: Event) => {
+            // 避免点切换时触发标题栏 drag
+            event.preventDefault();
+            event.stopPropagation();
+        };
+        prev.addEventListener("mousedown", stopDrag);
+        next.addEventListener("mousedown", stopDrag);
+        prev.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.shiftDisplayRange(1);
+        });
+        next.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            this.shiftDisplayRange(-1);
+        });
+
+        nav.append(prev, label, next);
+        header.replaceChildren(title, nav);
+
+        this.rangeNavYearOptions = buildYearOptions(null, this.config.fromYear);
+        this.syncRangeNavigator();
+    }
+
+    /** 监听容器尺寸，同步标题 / 范围文案的显隐 */
+    private bindHeaderLayout(dialogEl: HTMLElement) {
+        const container = dialogEl.querySelector(".jchm-dialog__container") as HTMLElement | null;
+        if (!container) {
+            return;
+        }
+        this.titleVisibilityObserver?.disconnect();
+        this.titleVisibilityObserver = new ResizeObserver(() => {
+            this.syncHeaderLayout();
+        });
+        this.titleVisibilityObserver.observe(container);
+        this.syncHeaderLayout();
+    }
+
+    /**
+     * 标题栏自适应布局：
+     * 1. 范围切换将碰到设置按钮时，收起中间文案只留箭头；
+     * 2. 标题将碰到范围切换时整段隐藏（不截断）。
+     */
+    private syncHeaderLayout() {
+        const header = this.dialog?.element.querySelector(".jchm-dialog__header") as HTMLElement | null;
+        const title = header?.querySelector(".jchm-dialog__title") as HTMLElement | null;
+        const nav = header?.querySelector(".jchm-range-nav") as HTMLElement | null;
+        const label = nav?.querySelector(".jchm-range-nav__label") as HTMLElement | null;
+        const setting = header?.querySelector(".jchm-dialog__setting") as HTMLElement | null;
+        if (!nav) {
+            return;
+        }
+
+        const gap = 8;
+        const i18n = getI18n();
+
+        // 先恢复文案再量；与设置重叠则只留箭头
+        if (label) {
+            label.classList.remove("fn__none");
+            if (setting) {
+                const overlapsSetting =
+                    nav.getBoundingClientRect().right + gap > setting.getBoundingClientRect().left;
+                label.classList.toggle("fn__none", overlapsSetting);
+            }
+            // 文案隐藏时把当前范围挂到导航上，便于读屏
+            const rangeText = label.textContent || i18n.displayRange;
+            nav.setAttribute("aria-label", label.classList.contains("fn__none") ? rangeText : i18n.displayRange);
+        }
+
+        // 再处理左侧标题：与范围切换重叠则隐藏
+        if (title) {
+            title.classList.remove("fn__none");
+            const overlapsNav =
+                title.getBoundingClientRect().right + gap > nav.getBoundingClientRect().left;
+            title.classList.toggle("fn__none", overlapsNav);
+        }
+    }
+
+    /** 按当前配置与可选年刷新标题栏文案与左右按钮可用性 */
+    private syncRangeNavigator() {
+        const nav = this.dialog?.element.querySelector(".jchm-range-nav") as HTMLElement | null;
+        if (!nav) {
+            return;
+        }
+        const i18n = getI18n();
+        const options = buildDisplayRangeOptions(this.rangeNavYearOptions);
+        const index = getDisplayRangeIndex(this.config, options);
+        const label = nav.querySelector(".jchm-range-nav__label");
+        if (label) {
+            label.textContent = getDisplayRangeLabel(this.config, i18n.displayRecentYear);
+        }
+        const buttons = nav.querySelectorAll(".jchm-range-nav__btn");
+        const prev = buttons[0] as HTMLButtonElement | undefined;
+        const next = buttons[1] as HTMLButtonElement | undefined;
+        if (prev) {
+            prev.disabled = index >= options.length - 1;
+        }
+        if (next) {
+            next.disabled = index <= 0;
+        }
+        // 范围文案变长/变短后，重新判断标题与中间文案显隐
+        this.syncHeaderLayout();
+    }
+
+    /** 拉取库内最早年后更新标题栏可切换年份 */
+    private async refreshRangeNavigatorYears() {
+        const earliest = await this.resolveEarliestYear();
+        if (!this.dialog) {
+            return;
+        }
+        this.rangeNavYearOptions = buildYearOptions(earliest, this.config.fromYear);
+        this.syncRangeNavigator();
+    }
+
+    /**
+     * 左右切换显示范围。
+     * delta > 0：更早（最近一年 → 今年 → … → 最早年）；
+     * delta < 0：更新。
+     */
+    private shiftDisplayRange(delta: number) {
+        const options = buildDisplayRangeOptions(this.rangeNavYearOptions);
+        const index = getDisplayRangeIndex(this.config, options);
+        const next = options[index + delta];
+        if (!next) {
+            return;
+        }
+        this.applyConfigPatch(displayRangeOptionToPatch(next));
+    }
+
+    /** 应用配置补丁：持久化并按需刷新图表 / 标题栏范围 */
+    private applyConfigPatch(patch: Partial<PluginConfig>) {
+        const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
+        const prevScopeKey = this.earliestYearScopeKey();
+        const rangeChanged = Object.prototype.hasOwnProperty.call(patch, "displayMode")
+            || Object.prototype.hasOwnProperty.call(patch, "fromYear");
+
+        this.config = {...this.config, ...patch};
+        this.saveConfig();
+
+        if (this.earliestYearScopeKey() !== prevScopeKey) {
+            this.earliestYearCache = null;
+            void this.refreshRangeNavigatorYears();
+        } else if (rangeChanged) {
+            this.rangeNavYearOptions = buildYearOptions(
+                this.earliestYearCache?.year ?? null,
+                this.config.fromYear,
+            );
+            this.syncRangeNavigator();
+        }
+
+        // 仅改颜色时直接改 CSS 变量（含日详情缓存的热力图），避免重新跑 SQL
+        const keys = Object.keys(patch);
+        if (keys.length === 1 && keys[0] === "color") {
+            const roots = [
+                chartHost?.querySelector(".jchm"),
+                this.cachedHeatmapPanel?.querySelector(".jchm"),
+            ];
+            let applied = false;
+            for (const root of roots) {
+                if (root instanceof HTMLElement) {
+                    applyHeatColor(root, this.config.color);
+                    applied = true;
+                }
+            }
+            if (applied) {
+                return;
+            }
+        }
+
+        // 仅切换位置持久化：同步当前弹窗的 data-key，不刷新图表
+        if (keys.length === 1 && keys[0] === "persistPosition") {
+            this.syncDialogPositionKey();
+            return;
+        }
+
+        // 配置变了，DOM 缓存作废；日详情中改范围则回到热力图
+        this.cachedHeatmapPanel = null;
+        if (rangeChanged && this.view === "day") {
+            const body = this.getDialogBody();
+            if (body) {
+                void this.renderPanel(body);
+            }
+            return;
+        }
+        if (chartHost && this.view === "heatmap") {
+            this.refreshChart(chartHost);
+        }
     }
 
     private mountHeatmapPanel(container: HTMLElement, days: DayCount[]) {
@@ -415,60 +652,17 @@ export default class HeatMap extends Plugin {
         }
     }
 
-    private async openSettingsMenu(rect: DOMRect) {
+    private openSettingsMenu(rect: DOMRect) {
         const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
-        const earliest = await this.resolveEarliestYear();
-        const yearOptions = buildYearOptions(earliest, this.config.fromYear);
         const i18n = getI18n();
-
-        const applyConfigPatch = (patch: Partial<PluginConfig>) => {
-            const prevScopeKey = this.earliestYearScopeKey();
-            this.config = {...this.config, ...patch};
-            this.saveConfig();
-            if (this.earliestYearScopeKey() !== prevScopeKey) {
-                this.earliestYearCache = null;
-            }
-
-            // 仅改颜色时直接改 CSS 变量（含日详情缓存的热力图），避免重新跑 SQL
-            const keys = Object.keys(patch);
-            if (keys.length === 1 && keys[0] === "color") {
-                const roots = [
-                    chartHost?.querySelector(".jchm"),
-                    this.cachedHeatmapPanel?.querySelector(".jchm"),
-                ];
-                let applied = false;
-                for (const root of roots) {
-                    if (root instanceof HTMLElement) {
-                        applyHeatColor(root, this.config.color);
-                        applied = true;
-                    }
-                }
-                if (applied) {
-                    return;
-                }
-            }
-
-            // 仅切换位置持久化：同步当前弹窗的 data-key，不刷新图表
-            if (keys.length === 1 && keys[0] === "persistPosition") {
-                this.syncDialogPositionKey();
-                return;
-            }
-
-            // 配置变了，DOM 缓存作废；若仍在热力图页则立刻刷新（活动数据可按查询键复用）
-            this.cachedHeatmapPanel = null;
-            if (chartHost && this.view === "heatmap") {
-                this.refreshChart(chartHost);
-            }
-        };
 
         openConfigMenu({
             i18n,
             getConfig: () => this.config,
-            yearOptions,
             rect,
             isMobile: this.isMobile,
             onChange: (patch) => {
-                applyConfigPatch(patch);
+                this.applyConfigPatch(patch);
             },
             onOpenScope: () => {
                 openScopeDialog({
@@ -485,7 +679,7 @@ export default class HeatMap extends Plugin {
                                 && prev.every((id, i) => id === includedBoxIds[i])
                             );
                         if (!same) {
-                            applyConfigPatch({includedBoxIds});
+                            this.applyConfigPatch({includedBoxIds});
                         }
                     },
                 });
@@ -508,7 +702,7 @@ export default class HeatMap extends Plugin {
                     onPreview: previewColor,
                     onSave: (color) => {
                         if (this.config.color !== color) {
-                            applyConfigPatch({color});
+                            this.applyConfigPatch({color});
                         } else {
                             previewColor(color);
                         }
@@ -527,7 +721,7 @@ export default class HeatMap extends Plugin {
                             && sameCuts(this.config.percentileThresholds, result.percentileThresholds)
                             && sameCuts(this.config.countThresholds, result.countThresholds);
                         if (!same) {
-                            applyConfigPatch(result);
+                            this.applyConfigPatch(result);
                         }
                     },
                 });

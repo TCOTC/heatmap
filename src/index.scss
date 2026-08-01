@@ -587,9 +587,58 @@
   }
 }
 
+/* 主弹窗标题栏：左侧标题 + 居中范围切换 + 右侧设置 */
+.jchm-dialog__header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.jchm-dialog__title {
+  position: relative;
+  z-index: 2;
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+.jchm-range-nav {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  z-index: 1;
+  max-width: calc(100% - 72px);
+  box-sizing: border-box;
+
+  &__btn {
+    flex-shrink: 0;
+    margin: 0;
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+  }
+
+  &__label {
+    min-width: 5.5em;
+    padding: 0 4px;
+    text-align: center;
+    line-height: 20px;
+    white-space: nowrap;
+    user-select: none;
+  }
+}
+
 /* 挂在 Dialog 标题栏，关闭按钮左侧 */
 .jchm-dialog__setting {
-  float: right;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
 }
 
 /* 筛选笔记本：勾选 Dialog */

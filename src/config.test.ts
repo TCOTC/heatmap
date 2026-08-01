@@ -4,8 +4,12 @@ import {
     it,
 } from "node:test";
 import {
+    buildDisplayRangeOptions,
     buildYearOptions,
+    displayRangeOptionToPatch,
     expandYearRange,
+    getDisplayRangeIndex,
+    getDisplayRangeLabel,
     isDisplayMode,
     isLevelMode,
     isStatMode,
@@ -46,6 +50,57 @@ describe("buildYearOptions", () => {
 
     it("未来已选年不会抬高上界，上界仍是今年", () => {
         assert.deepEqual(buildYearOptions(null, 2030, now), [2026]);
+    });
+});
+
+describe("display range 标题切换", () => {
+    const now = new Date(2026, 6, 31);
+    const options = buildDisplayRangeOptions([2026, 2025, 2024]);
+
+    it("序列以最近一年开头，后接从新到旧的起始年", () => {
+        assert.deepEqual(options, [
+            {kind: "recent"},
+            {kind: "years", fromYear: 2026},
+            {kind: "years", fromYear: 2025},
+            {kind: "years", fromYear: 2024},
+        ]);
+    });
+
+    it("定位当前项下标", () => {
+        assert.equal(getDisplayRangeIndex({displayMode: "recent", fromYear: null}, options), 0);
+        assert.equal(getDisplayRangeIndex({displayMode: "years", fromYear: 2026}, options), 1);
+        assert.equal(getDisplayRangeIndex({displayMode: "years", fromYear: 2025}, options), 2);
+        assert.equal(getDisplayRangeIndex({displayMode: "years", fromYear: 1999}, options), 0);
+    });
+
+    it("标题文案：最近一年 / 单年 / 跨年区间", () => {
+        assert.equal(
+            getDisplayRangeLabel({displayMode: "recent", fromYear: null}, "最近一年", now),
+            "最近一年",
+        );
+        assert.equal(
+            getDisplayRangeLabel({displayMode: "years", fromYear: 2026}, "最近一年", now),
+            "2026",
+        );
+        assert.equal(
+            getDisplayRangeLabel({displayMode: "years", fromYear: 2025}, "最近一年", now),
+            "2025-2026",
+        );
+        assert.equal(
+            getDisplayRangeLabel({displayMode: "years", fromYear: 2024}, "最近一年", now),
+            "2024-2026",
+        );
+    });
+
+    it("切换项转为配置补丁", () => {
+        assert.deepEqual(displayRangeOptionToPatch({kind: "recent"}), {
+            displayMode: "recent",
+            fromYear: null,
+        });
+        assert.deepEqual(displayRangeOptionToPatch({kind: "years", fromYear: 2025}), {
+            displayMode: "years",
+            fromYear: 2025,
+        });
     });
 });
 

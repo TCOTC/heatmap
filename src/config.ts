@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 /**
- * 生成设置菜单中的年份选项（单选起点）：
+ * 生成显示范围可选的起始年份（从新到旧）：
  * 从 min(库内最早年, 已选 fromYear, 今年) 到今年。
  * 选择某年表示显示「该年 → 今年」的连续区间。
  */
@@ -52,12 +52,62 @@ export function expandYearRange(fromYear: number, toYear: number): number[] {
     return years;
 }
 
+/** 标题栏显示范围切换项：「最近一年」或某一起始年 */
+export type DisplayRangeOption =
+    | {kind: "recent"}
+    | {kind: "years"; fromYear: number};
+
+/** 生成 [最近一年, 今年, …, 最早年] 切换序列 */
+export function buildDisplayRangeOptions(yearOptions: number[]): DisplayRangeOption[] {
+    return [{kind: "recent"}, ...yearOptions.map((fromYear) => ({kind: "years" as const, fromYear}))];
+}
+
+/** 当前配置在切换序列中的下标；找不到时回退「最近一年」 */
+export function getDisplayRangeIndex(
+    config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear">,
+    options: DisplayRangeOption[],
+): number {
+    if (config.displayMode !== "years" || config.fromYear == null) {
+        return 0;
+    }
+    const idx = options.findIndex((item) => item.kind === "years" && item.fromYear === config.fromYear);
+    return idx >= 0 ? idx : 0;
+}
+
+/**
+ * 标题中间文案：
+ * - recent →「最近一年」
+ * - 仅今年 →「2026」
+ * - 跨年 →「2025-2026」
+ */
+export function getDisplayRangeLabel(
+    config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear">,
+    recentLabel: string,
+    now = new Date(),
+): string {
+    if (config.displayMode !== "years" || config.fromYear == null) {
+        return recentLabel;
+    }
+    const currentYear = now.getFullYear();
+    const fromYear = Math.min(config.fromYear, currentYear);
+    if (fromYear >= currentYear) {
+        return String(currentYear);
+    }
+    return `${fromYear}-${currentYear}`;
+}
+
+/** 将切换项转为配置补丁 */
+export function displayRangeOptionToPatch(option: DisplayRangeOption): Pick<HeatMapConfigOptions, "displayMode" | "fromYear"> {
+    if (option.kind === "recent") {
+        return {displayMode: "recent", fromYear: null};
+    }
+    return {displayMode: "years", fromYear: option.fromYear};
+}
+
 export interface OpenConfigMenuOptions {
     i18n: I18n;
     /** 读取当前配置（每次点击时取最新，避免菜单闭包快照过期） */
     getConfig: () => HeatMapConfigOptions;
-    /** 设置菜单中展示的年份选项（由 buildYearOptions 生成） */
-    yearOptions: number[];
     rect: DOMRect;
     isMobile: boolean;
     onChange: (patch: Partial<HeatMapConfigOptions>) => void;
@@ -69,9 +119,9 @@ export interface OpenConfigMenuOptions {
     onOpenLevels: () => void;
 }
 
-/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、格子档位、颜色、记住弹窗位置） */
+/** 弹出配置菜单（视图、统计方式、年份排序、每周第一天、筛选笔记本、格子档位、颜色、记住弹窗位置） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
-    const {i18n, getConfig, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor, onOpenLevels} = options;
+    const {i18n, getConfig, rect, isMobile, onChange, onOpenScope, onOpenColor, onOpenLevels} = options;
     const config = getConfig();
     const menu = new Menu("heatmap-config");
 
@@ -146,43 +196,6 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
                 },
             },
         ],
-    });
-
-    const rangeSubmenu: any[] = [
-        {
-            id: "heatmap-range-recent",
-            label: i18n.displayRecentYear,
-            iconHTML: "",
-            checked: config.displayMode === "recent",
-            click: () => {
-                if (getConfig().displayMode !== "recent") {
-                    onChange({displayMode: "recent", fromYear: null});
-                }
-            },
-        },
-    ];
-    for (const year of yearOptions) {
-        const selected = config.displayMode === "years" && config.fromYear === year;
-        rangeSubmenu.push({
-            id: `heatmap-range-year-${year}`,
-            label: String(year),
-            iconHTML: "",
-            checked: selected,
-            click: () => {
-                const current = getConfig();
-                if (current.displayMode !== "years" || current.fromYear !== year) {
-                    onChange({displayMode: "years", fromYear: year});
-                }
-            },
-        });
-    }
-
-    menu.addItem({
-        id: "heatmap-display-range",
-        label: i18n.displayRange,
-        iconHTML: "",
-        type: "submenu",
-        submenu: rangeSubmenu,
     });
 
     menu.addItem({
