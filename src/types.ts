@@ -28,7 +28,10 @@ export type LevelCuts = readonly [number, number, number];
 
 export interface DayCount {
     date: string; // YYYYMMDD
+    /** 当日叶子块数 */
     count: number;
+    /** 当日有活动的文档数（按 root_id 去重） */
+    docs: number;
 }
 
 export interface DayDoc {
@@ -42,6 +45,10 @@ export interface DayDoc {
 export interface DayDocsResult {
     docs: DayDoc[];
     truncated: boolean;
+    /** 当日实际文档总数（不受列表截断影响） */
+    totalDocs: number;
+    /** 当日实际块总数（不受列表截断影响） */
+    totalBlocks: number;
 }
 
 export interface HeatMapConfigOptions {

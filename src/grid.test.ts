@@ -30,15 +30,17 @@ describe("buildMonthGrid", () => {
     });
 
     it("把 countMap 填入对应日期，缺失视为 0", () => {
-        const countMap = new Map([["20240115", 7]]);
+        const countMap = new Map([["20240115", {count: 7, docs: 2}]]);
         const grid = buildMonthGrid(countMap, 2024, 0, "sunday");
         const cell = grid.cells.find((c) => c.date === "20240115");
         assert.ok(cell);
         assert.equal(cell!.count, 7);
+        assert.equal(cell!.docs, 2);
 
         const empty = grid.cells.find((c) => c.date === "20240116");
         assert.ok(empty);
         assert.equal(empty!.count, 0);
+        assert.equal(empty!.docs, 0);
     });
 
     it("未来日期带 day 数字但不计入 cells 统计集合", () => {
@@ -143,31 +145,31 @@ describe("buildMonthLabels", () => {
     it("在包含每月 1 号的周列挂上月份文案", () => {
         const weeks = [
             [
-                {date: "20240129", count: 0},
-                {date: "20240130", count: 0},
-                {date: "20240131", count: 0},
-                {date: "20240201", count: 0},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
+                {date: "20240129", count: 0, docs: 0},
+                {date: "20240130", count: 0, docs: 0},
+                {date: "20240131", count: 0, docs: 0},
+                {date: "20240201", count: 0, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
             ],
             [
-                {date: "20240205", count: 0},
-                {date: "20240206", count: 0},
-                {date: "20240207", count: 0},
-                {date: "20240208", count: 0},
-                {date: "20240209", count: 0},
-                {date: "20240210", count: 0},
-                {date: "20240211", count: 0},
+                {date: "20240205", count: 0, docs: 0},
+                {date: "20240206", count: 0, docs: 0},
+                {date: "20240207", count: 0, docs: 0},
+                {date: "20240208", count: 0, docs: 0},
+                {date: "20240209", count: 0, docs: 0},
+                {date: "20240210", count: 0, docs: 0},
+                {date: "20240211", count: 0, docs: 0},
             ],
             [
-                {date: "20240226", count: 0},
-                {date: "20240227", count: 0},
-                {date: "20240228", count: 0},
-                {date: "20240229", count: 0},
-                {date: "20240301", count: 0},
-                {date: "", count: -1},
-                {date: "", count: -1},
+                {date: "20240226", count: 0, docs: 0},
+                {date: "20240227", count: 0, docs: 0},
+                {date: "20240228", count: 0, docs: 0},
+                {date: "20240229", count: 0, docs: 0},
+                {date: "20240301", count: 0, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
             ],
         ];
         const labels = buildMonthLabels(weeks, months);
@@ -180,22 +182,22 @@ describe("buildMonthLabels", () => {
     it("相邻月标签过近时隐藏前者，避免重叠", () => {
         const weeks = [
             [
-                {date: "20240101", count: 0},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
+                {date: "20240101", count: 0, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
             ],
             [
-                {date: "20240201", count: 0},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
-                {date: "", count: -1},
+                {date: "20240201", count: 0, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
+                {date: "", count: -1, docs: 0},
             ],
         ];
         const labels = buildMonthLabels(weeks, months);
@@ -230,9 +232,10 @@ describe("buildPeriods", () => {
         today.setHours(0, 0, 0, 0);
         const key = formatDateKey(today);
 
-        const periods = buildPeriods(new Map([[key, 42]]), "recent", null, "sunday", "newestFirst");
+        const periods = buildPeriods(new Map([[key, {count: 42, docs: 5}]]), "recent", null, "sunday", "newestFirst");
         const cell = periods[0].cells.find((c) => c.date === key);
         assert.ok(cell);
         assert.equal(cell!.count, 42);
+        assert.equal(cell!.docs, 5);
     });
 });

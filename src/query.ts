@@ -48,7 +48,14 @@ LIMIT 1`;
     return Number.isFinite(year) && year > 0 ? year : null;
 }
 
-/** 查询热力图按日叶子块数量（一次 SQL；无 created/updated 索引，多年并发会重复全表扫描） */
+/** 热力活动查询结果：按日明细 + 区间内去重文档数 */
+export interface ActivityResult {
+    days: DayCount[];
+    /** 查询区间内有活动的文档数（root_id 去重） */
+    totalDocs: number;
+}
+
+/** 查询热力图按日叶子块 / 文档数量（无 created/updated 索引，多年并发会重复全表扫描） */
 export async function queryActivity(
     mode: StatMode = "created",
     config: Pick<HeatMapConfigOptions, "displayMode" | "fromYear" | "weekStart" | "viewMode" | "includedBoxIds"> = {
@@ -59,15 +66,16 @@ export async function queryActivity(
         includedBoxIds: null,
     },
     signal?: AbortSignal,
-): Promise<DayCount[]> {
+): Promise<ActivityResult> {
     const {startKey, endKeyExclusive} = getQueryBounds(config);
     const sqlLimit = sqlLimitForDateRange(startKey, endKeyExclusive);
     const leafFilter = `type NOT IN ${CONTAINER_TYPES}`;
     const boxFilter = buildBoxFilter(config.includedBoxIds);
-    let sql: string;
+    let daySql: string;
+    let docsSql: string;
 
     if (mode === "updated") {
-        sql = `SELECT SUBSTR(updated, 1, 8) AS date, COUNT(*) AS count
+        daySql = `SELECT SUBSTR(updated, 1, 8) AS date, COUNT(*) AS count, COUNT(DISTINCT root_id) AS docs
 FROM blocks
 WHERE ${leafFilter}${boxFilter}
   AND updated != ''
@@ -76,14 +84,21 @@ WHERE ${leafFilter}${boxFilter}
 GROUP BY SUBSTR(updated, 1, 8)
 ORDER BY date ASC
 LIMIT ${sqlLimit}`;
+        docsSql = `SELECT COUNT(DISTINCT root_id) AS docs
+FROM blocks
+WHERE ${leafFilter}${boxFilter}
+  AND updated != ''
+  AND updated >= '${startKey}'
+  AND updated < '${endKeyExclusive}'
+LIMIT 1`;
     } else if (mode === "mixed") {
-        sql = `SELECT date, COUNT(*) AS count FROM (
-  SELECT SUBSTR(created, 1, 8) AS date, id FROM blocks
+        daySql = `SELECT date, COUNT(*) AS count, COUNT(DISTINCT root_id) AS docs FROM (
+  SELECT SUBSTR(created, 1, 8) AS date, id, root_id FROM blocks
   WHERE ${leafFilter}${boxFilter}
     AND created >= '${startKey}'
     AND created < '${endKeyExclusive}'
   UNION
-  SELECT SUBSTR(updated, 1, 8) AS date, id FROM blocks
+  SELECT SUBSTR(updated, 1, 8) AS date, id, root_id FROM blocks
   WHERE ${leafFilter}${boxFilter}
     AND updated != ''
     AND updated >= '${startKey}'
@@ -92,8 +107,20 @@ LIMIT ${sqlLimit}`;
 GROUP BY date
 ORDER BY date ASC
 LIMIT ${sqlLimit}`;
+        docsSql = `SELECT COUNT(*) AS docs FROM (
+  SELECT root_id FROM blocks
+  WHERE ${leafFilter}${boxFilter}
+    AND created >= '${startKey}'
+    AND created < '${endKeyExclusive}'
+  UNION
+  SELECT root_id FROM blocks
+  WHERE ${leafFilter}${boxFilter}
+    AND updated != ''
+    AND updated >= '${startKey}'
+    AND updated < '${endKeyExclusive}'
+) LIMIT 1`;
     } else {
-        sql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count
+        daySql = `SELECT SUBSTR(created, 1, 8) AS date, COUNT(*) AS count, COUNT(DISTINCT root_id) AS docs
 FROM blocks
 WHERE ${leafFilter}${boxFilter}
   AND created >= '${startKey}'
@@ -101,13 +128,26 @@ WHERE ${leafFilter}${boxFilter}
 GROUP BY SUBSTR(created, 1, 8)
 ORDER BY date ASC
 LIMIT ${sqlLimit}`;
+        docsSql = `SELECT COUNT(DISTINCT root_id) AS docs
+FROM blocks
+WHERE ${leafFilter}${boxFilter}
+  AND created >= '${startKey}'
+  AND created < '${endKeyExclusive}'
+LIMIT 1`;
     }
 
-    const rows = await execSql(sql, signal);
-    return rows.map((row) => ({
-        date: String(row.date),
-        count: Number(row.count) || 0,
-    }));
+    const [rows, docsRows] = await Promise.all([
+        execSql(daySql, signal),
+        execSql(docsSql, signal),
+    ]);
+    return {
+        days: rows.map((row) => ({
+            date: String(row.date),
+            count: Number(row.count) || 0,
+            docs: Number(row.docs) || 0,
+        })),
+        totalDocs: Number(docsRows[0]?.docs) || 0,
+    };
 }
 
 /** 查询某日按统计规则命中的文档（叶子块按 root_id 聚合，块数降序；单条 SQL 带出标题/图标） */
@@ -118,7 +158,7 @@ export async function queryDayDocs(
     signal?: AbortSignal,
 ): Promise<DayDocsResult> {
     if (!/^\d{8}$/.test(dateKey)) {
-        return {docs: [], truncated: false};
+        return {docs: [], truncated: false, totalDocs: 0, totalBlocks: 0};
     }
     const startKey = `${dateKey}000000`;
     const endKeyExclusive = `${nextDateKey(dateKey)}000000`;
@@ -157,13 +197,20 @@ WHERE ${leafFilter}${boxFilter}
 GROUP BY root_id`;
     }
 
-    const sql = `SELECT agg.id AS id, agg.count AS count, d.content AS content, d.ial AS ial
+    const listSql = `SELECT agg.id AS id, agg.count AS count, d.content AS content, d.ial AS ial
 FROM (${aggSql}) AS agg
 LEFT JOIN blocks d ON d.id = agg.id AND d.type = 'd'
 ORDER BY agg.count DESC, d.content ASC, agg.id ASC
 LIMIT ${DAY_DOCS_SQL_LIMIT}`;
+    // 汇总不受 LIMIT 影响，与热力格子提示保持一致
+    const totalsSql = `SELECT COUNT(*) AS docs, COALESCE(SUM(count), 0) AS blocks
+FROM (${aggSql})
+LIMIT 1`;
 
-    const rows = await execSql(sql, signal);
+    const [rows, totalsRows] = await Promise.all([
+        execSql(listSql, signal),
+        execSql(totalsSql, signal),
+    ]);
     const docs: DayDoc[] = [];
     for (const row of rows) {
         const id = String(row.id || "");
@@ -181,7 +228,12 @@ LIMIT ${DAY_DOCS_SQL_LIMIT}`;
     if (truncated) {
         docs.length = DAY_DOCS_LIMIT;
     }
-    return {docs, truncated};
+    return {
+        docs,
+        truncated,
+        totalDocs: Number(totalsRows[0]?.docs) || 0,
+        totalBlocks: Number(totalsRows[0]?.blocks) || 0,
+    };
 }
 
 /**

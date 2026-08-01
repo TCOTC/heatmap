@@ -10,6 +10,8 @@ export interface PeriodGrid {
 export interface GridCell {
     date: string;
     count: number;
+    /** 当日文档数；占位 / 未来格为 0 */
+    docs: number;
     /** 当月日期数字；占位格为 0 */
     day?: number;
 }
@@ -27,8 +29,11 @@ export interface MonthGrid {
     weeks: GridCell[][];
 }
 
+/** 按日活动计数：块数 + 文档数 */
+export type DayActivityMap = Map<string, {count: number; docs: number}>;
+
 export function buildPeriods(
-    countMap: Map<string, number>,
+    countMap: DayActivityMap,
     displayMode: DisplayMode,
     fromYear: number | null,
     weekStart: WeekStart,
@@ -103,7 +108,7 @@ export function groupMonthsByYear(
 
 /** 单月传统日历网格（周为行） */
 export function buildMonthGrid(
-    countMap: Map<string, number>,
+    countMap: DayActivityMap,
     year: number,
     month: number,
     weekStart: WeekStart,
@@ -120,7 +125,7 @@ export function buildMonthGrid(
     // 月初对齐到周起始的占位
     const leading = getWeekOffset(first, weekStart);
     for (let i = 0; i < leading; i++) {
-        week.push({date: "", count: -1, day: 0});
+        week.push({date: "", count: -1, docs: 0, day: 0});
     }
 
     for (let day = 1; day <= last.getDate(); day++) {
@@ -129,9 +134,10 @@ export function buildMonthGrid(
         let cell: GridCell;
         if (cursor > today) {
             // 未来日期显示数字但不参与热力统计
-            cell = {date: key, count: -2, day};
+            cell = {date: key, count: -2, docs: 0, day};
         } else {
-            cell = {date: key, count: countMap.get(key) || 0, day};
+            const activity = countMap.get(key);
+            cell = {date: key, count: activity?.count || 0, docs: activity?.docs || 0, day};
             cells.push(cell);
         }
         week.push(cell);
@@ -143,7 +149,7 @@ export function buildMonthGrid(
 
     if (week.length > 0) {
         while (week.length < 7) {
-            week.push({date: "", count: -1, day: 0});
+            week.push({date: "", count: -1, docs: 0, day: 0});
         }
         weeks.push(week);
     }
@@ -212,7 +218,7 @@ export function buildMonthLabels(weeks: GridCell[][], months: string[]): string[
 
 /** 近一年滚动窗（可跨两个日历年） */
 function buildRollingYearGrid(
-    countMap: Map<string, number>,
+    countMap: DayActivityMap,
     weekStart: WeekStart,
 ): PeriodGrid {
     const today = new Date();
@@ -227,7 +233,7 @@ function buildRollingYearGrid(
 
 /** 单个日历年：年初对齐周起始，当前年截止到今天 */
 function buildCalendarYearGrid(
-    countMap: Map<string, number>,
+    countMap: DayActivityMap,
     year: number,
     weekStart: WeekStart,
 ): PeriodGrid {
@@ -246,10 +252,15 @@ function buildCalendarYearGrid(
     return fillCalendarGrid(start, end, year, countMap);
 }
 
+function cellFromMap(countMap: DayActivityMap, key: string): GridCell {
+    const activity = countMap.get(key);
+    return {date: key, count: activity?.count || 0, docs: activity?.docs || 0};
+}
+
 function fillGrid(
     start: Date,
     end: Date,
-    countMap: Map<string, number>,
+    countMap: DayActivityMap,
 ): PeriodGrid {
     const cells: GridCell[] = [];
     const weeks: GridCell[][] = [];
@@ -257,7 +268,7 @@ function fillGrid(
 
     for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
         const key = formatDateKey(cursor);
-        const cell = {date: key, count: countMap.get(key) || 0};
+        const cell = cellFromMap(countMap, key);
         cells.push(cell);
         week.push(cell);
         if (week.length === 7) {
@@ -267,7 +278,7 @@ function fillGrid(
     }
     if (week.length > 0) {
         while (week.length < 7) {
-            week.push({date: "", count: -1});
+            week.push({date: "", count: -1, docs: 0});
         }
         weeks.push(week);
     }
@@ -279,7 +290,7 @@ function fillCalendarGrid(
     start: Date,
     end: Date,
     year: number,
-    countMap: Map<string, number>,
+    countMap: DayActivityMap,
 ): PeriodGrid {
     const cells: GridCell[] = [];
     const weeks: GridCell[][] = [];
@@ -291,9 +302,9 @@ function fillCalendarGrid(
         let cell: GridCell;
         if (!key.startsWith(yearPrefix)) {
             // 对齐产生的上一年占位，不计入统计
-            cell = {date: "", count: -1};
+            cell = {date: "", count: -1, docs: 0};
         } else {
-            cell = {date: key, count: countMap.get(key) || 0};
+            cell = cellFromMap(countMap, key);
             cells.push(cell);
         }
         week.push(cell);
@@ -304,7 +315,7 @@ function fillCalendarGrid(
     }
     if (week.length > 0) {
         while (week.length < 7) {
-            week.push({date: "", count: -1});
+            week.push({date: "", count: -1, docs: 0});
         }
         weeks.push(week);
     }

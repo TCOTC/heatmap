@@ -24,11 +24,12 @@ export function renderHeatMap(
         | "countThresholds"
     >,
     onDayClick?: (dateKey: string, count: number) => void,
+    totalDocs = 0,
 ): HTMLElement {
     if (config.viewMode === "calendar") {
-        return renderCalendarView(days, i18n, config, onDayClick);
+        return renderCalendarView(days, i18n, config, onDayClick, totalDocs);
     }
-    return renderGithubView(days, i18n, config, onDayClick);
+    return renderGithubView(days, i18n, config, onDayClick, totalDocs);
 }
 
 /** 渲染 GitHub 风格热力图 */
@@ -47,16 +48,21 @@ function renderGithubView(
         | "countThresholds"
     >,
     onDayClick?: (dateKey: string, count: number) => void,
+    totalDocs = 0,
 ): HTMLElement {
     const {weekStart, displayMode, fromYear, yearOrder, color, levelMode, percentileThresholds, countThresholds} =
         config;
-    const countMap = new Map(days.map((d) => [d.date, d.count]));
+    const countMap = new Map(days.map((d) => [d.date, {count: d.count, docs: d.docs}]));
     const periods = buildPeriods(countMap, displayMode, fromYear, weekStart, yearOrder);
 
     const allCounts: number[] = [];
+    let totalBlocks = 0;
     for (const period of periods) {
         for (const cell of period.cells) {
             allCounts.push(cell.count);
+            if (cell.count > 0) {
+                totalBlocks += cell.count;
+            }
         }
     }
     const {levelOf, thresholds} = calcLevels(allCounts, {
@@ -64,7 +70,6 @@ function renderGithubView(
         percentileThresholds,
         countThresholds,
     });
-    const total = allCounts.reduce((sum: number, c: number) => sum + c, 0);
     const weekdayLabels = orderWeekdays(i18n.weekdays, weekStart);
 
     const root = document.createElement("div");
@@ -95,7 +100,7 @@ function renderGithubView(
     scrollX.appendChild(track);
     scrollY.appendChild(scrollX);
     root.appendChild(scrollY);
-    root.appendChild(renderFooter(i18n, total, thresholds));
+    root.appendChild(renderFooter(i18n, totalBlocks, totalDocs, thresholds));
 
     // 若已缩到下限仍溢出，滚到最右侧展示最近日期
     requestAnimationFrame(() => {
@@ -181,6 +186,7 @@ function renderPeriod(
                 day.setAttribute("data-count", String(cell.count));
                 day.setAttribute("aria-label", i18n.cellTooltip
                     .replace("${date}", formatDisplayDate(cell.date))
+                    .replace("${docs}", String(cell.docs))
                     .replace("${count}", String(cell.count)));
                 if (cell.count > 0 && onDayClick) {
                     day.classList.add("jchm__cell--clickable");

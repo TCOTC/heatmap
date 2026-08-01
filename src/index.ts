@@ -39,7 +39,6 @@ import {
     renderDayLoading,
     renderHeatMap,
     type DayCount,
-    type DayDoc,
     type DayDocsResult,
     type DisplayMode,
     type LevelCuts,
@@ -119,6 +118,7 @@ export default class HeatMap extends Plugin {
      * 弹窗打开后用户通常无法编辑文档，数据可视为稳定；关闭时全部清空。
      */
     private cachedDays: DayCount[] | null = null;
+    private cachedTotalDocs = 0;
     private cachedDaysKey: string | null = null;
     private earliestYearCache: {key: string; year: number | null;} | null = null;
     private dayDocsCache = new Map<string, DayDocsResult>();
@@ -276,7 +276,7 @@ export default class HeatMap extends Plugin {
         const i18n = getI18n();
 
         try {
-            const days = await this.awaitWithLoadingDelay(
+            const {days, totalDocs} = await this.awaitWithLoadingDelay(
                 queryActivity(this.config.statMode, this.config, signal),
                 () => {
                     this.ensureDialog(true);
@@ -293,8 +293,9 @@ export default class HeatMap extends Plugin {
                 return;
             }
             this.cachedDays = days;
+            this.cachedTotalDocs = totalDocs;
             this.cachedDaysKey = getActivityCacheKey(this.config.statMode, this.config);
-            this.mountHeatmapPanel(container, days);
+            this.mountHeatmapPanel(container, days, totalDocs);
         } catch (e) {
             if (this.isAbortError(e) || signal.aborted) {
                 return;
@@ -405,20 +406,17 @@ export default class HeatMap extends Plugin {
         next.innerHTML = "<svg><use xlink:href=\"#iconRight\"></use></svg>";
 
         const stopDrag = (event: Event) => {
-            // 避免点切换时触发标题栏 drag
+            // 避免点切换时触发标题栏 drag；勿 stopPropagation，否则设置菜单点别处关不掉
             event.preventDefault();
-            event.stopPropagation();
         };
         prev.addEventListener("mousedown", stopDrag);
         next.addEventListener("mousedown", stopDrag);
         prev.addEventListener("click", (event) => {
             event.preventDefault();
-            event.stopPropagation();
             this.shiftDisplayRange(1);
         });
         next.addEventListener("click", (event) => {
             event.preventDefault();
-            event.stopPropagation();
             this.shiftDisplayRange(-1);
         });
 
@@ -594,7 +592,7 @@ export default class HeatMap extends Plugin {
         }
     }
 
-    private mountHeatmapPanel(container: HTMLElement, days: DayCount[]) {
+    private mountHeatmapPanel(container: HTMLElement, days: DayCount[], totalDocs: number) {
         this.view = "heatmap";
         const i18n = getI18n();
         const panel = document.createElement("div");
@@ -603,7 +601,7 @@ export default class HeatMap extends Plugin {
         chartHost.className = "jchm-panel__chart";
         chartHost.appendChild(renderHeatMap(days, i18n, this.config, (dateKey) => {
             this.openDayDetail(dateKey);
-        }));
+        }, totalDocs));
         panel.appendChild(chartHost);
         container.replaceChildren(panel);
     }
@@ -627,6 +625,7 @@ export default class HeatMap extends Plugin {
             event.stopPropagation();
         });
         btn.addEventListener("click", (event) => {
+            // 设置按钮需 stopPropagation，否则同一次 click 会冒泡到思源全局逻辑并立刻关掉刚打开的菜单
             event.preventDefault();
             event.stopPropagation();
             this.openSettingsMenu(btn.getBoundingClientRect());
@@ -771,6 +770,7 @@ export default class HeatMap extends Plugin {
 
     private clearQueryCaches() {
         this.cachedDays = null;
+        this.cachedTotalDocs = 0;
         this.cachedDaysKey = null;
         this.earliestYearCache = null;
         this.dayDocsCache.clear();
@@ -807,11 +807,11 @@ export default class HeatMap extends Plugin {
         }
     }
 
-    private mountChart(chartHost: HTMLElement, days: DayCount[]) {
+    private mountChart(chartHost: HTMLElement, days: DayCount[], totalDocs: number) {
         const i18n = getI18n();
         chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
             this.openDayDetail(dateKey);
-        }));
+        }, totalDocs));
     }
 
     private async refreshChart(chartHost: HTMLElement) {
@@ -834,7 +834,7 @@ export default class HeatMap extends Plugin {
                     if (!this.dialog || this.view !== "heatmap") {
                         continue;
                     }
-                    this.mountChart(chartHost, this.cachedDays);
+                    this.mountChart(chartHost, this.cachedDays, this.cachedTotalDocs);
                     continue;
                 }
 
@@ -844,7 +844,7 @@ export default class HeatMap extends Plugin {
                 const hasChart = Boolean(chartHost.querySelector(".jchm"));
 
                 try {
-                    const days = await this.awaitWithLoadingDelay(
+                    const {days, totalDocs} = await this.awaitWithLoadingDelay(
                         queryActivity(this.config.statMode, this.config, signal),
                         () => {
                             // 已有图表时保留旧内容；仅空壳时才上 Loading
@@ -858,8 +858,9 @@ export default class HeatMap extends Plugin {
                         continue;
                     }
                     this.cachedDays = days;
+                    this.cachedTotalDocs = totalDocs;
                     this.cachedDaysKey = queryKey;
-                    this.mountChart(chartHost, days);
+                    this.mountChart(chartHost, days, totalDocs);
                 } catch (e) {
                     if (this.isAbortError(e) || signal.aborted) {
                         continue;
@@ -897,8 +898,7 @@ export default class HeatMap extends Plugin {
     private mountDayDocPanel(
         container: HTMLElement,
         dateKey: string,
-        docs: DayDoc[],
-        truncated: boolean,
+        result: DayDocsResult,
     ) {
         const i18n = getI18n();
         this.view = "day";
@@ -906,8 +906,10 @@ export default class HeatMap extends Plugin {
         panel.className = "jchm-panel jchm-panel--day";
         panel.appendChild(renderDayDocList({
             dateKey,
-            docs,
-            truncated,
+            docs: result.docs,
+            truncated: result.truncated,
+            totalDocs: result.totalDocs,
+            totalBlocks: result.totalBlocks,
             i18n,
             onBack: this.bindDayBack(() => {
                 const body = this.getDialogBody();
@@ -944,7 +946,7 @@ export default class HeatMap extends Plugin {
             if (heatmapPanel) {
                 this.cachedHeatmapPanel = heatmapPanel;
             }
-            this.mountDayDocPanel(container, dateKey, cached.docs, cached.truncated);
+            this.mountDayDocPanel(container, dateKey, cached);
             return;
         }
 
@@ -999,7 +1001,7 @@ export default class HeatMap extends Plugin {
             if (heatmapPanel && !switchedToLoading) {
                 this.cachedHeatmapPanel = heatmapPanel;
             }
-            this.mountDayDocPanel(container, dateKey, result.docs, result.truncated);
+            this.mountDayDocPanel(container, dateKey, result);
         } catch (e) {
             if (this.isAbortError(e) || signal.aborted) {
                 return;

@@ -49,6 +49,7 @@ export {
     queryActivity,
     queryDayDocs,
     queryEarliestYear,
+    type ActivityResult,
 } from "./query";
 
 export {renderHeatMap} from "./render-heatmap";

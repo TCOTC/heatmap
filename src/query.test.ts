@@ -34,17 +34,22 @@ describe("queryDayDocs", () => {
             return {code: 0, msg: "", data: []};
         };
 
-        assert.deepEqual(await queryDayDocs(""), {docs: [], truncated: false});
-        assert.deepEqual(await queryDayDocs("2024-01-01"), {docs: [], truncated: false});
-        assert.deepEqual(await queryDayDocs("2024010"), {docs: [], truncated: false});
-        assert.deepEqual(await queryDayDocs("abcdefgh"), {docs: [], truncated: false});
+        assert.deepEqual(await queryDayDocs(""), {docs: [], truncated: false, totalDocs: 0, totalBlocks: 0});
+        assert.deepEqual(await queryDayDocs("2024-01-01"), {docs: [], truncated: false, totalDocs: 0, totalBlocks: 0});
+        assert.deepEqual(await queryDayDocs("2024010"), {docs: [], truncated: false, totalDocs: 0, totalBlocks: 0});
+        assert.deepEqual(await queryDayDocs("abcdefgh"), {docs: [], truncated: false, totalDocs: 0, totalBlocks: 0});
         assert.equal(calls, 0);
     });
 
     it("合法日期键会查询并映射文档列表", async () => {
-        let stmt = "";
+        let listStmt = "";
+        let totalsStmt = "";
         stub().fetchSyncPost = async (_url, data) => {
-            stmt = data.stmt;
+            if (data.stmt.includes("COALESCE(SUM(count)")) {
+                totalsStmt = data.stmt;
+                return {code: 0, msg: "", data: [{docs: 2, blocks: 4}]};
+            }
+            listStmt = data.stmt;
             return {
                 code: 0,
                 msg: "",
@@ -57,11 +62,14 @@ describe("queryDayDocs", () => {
         };
 
         const result = await queryDayDocs("20240115", "created");
-        assert.ok(stmt.includes("20240115000000"));
-        assert.ok(stmt.includes("20240116000000"));
-        assert.ok(stmt.includes("LIMIT 101"));
+        assert.ok(listStmt.includes("20240115000000"));
+        assert.ok(listStmt.includes("20240116000000"));
+        assert.ok(listStmt.includes("LIMIT 101"));
+        assert.ok(totalsStmt.includes("COALESCE(SUM(count)"));
         assert.deepEqual(result, {
             truncated: false,
+            totalDocs: 2,
+            totalBlocks: 4,
             docs: [
                 {id: "doc-a", title: "Alpha", icon: "1f4c4", count: 3},
                 {id: "doc-b", title: "doc-b", icon: "", count: 1},
@@ -69,23 +77,30 @@ describe("queryDayDocs", () => {
         });
     });
 
-    it("超过 100 篇时截断并标记 truncated", async () => {
-        stub().fetchSyncPost = async () => ({
-            code: 0,
-            msg: "",
-            data: Array.from({length: 101}, (_, i) => ({
-                id: `doc-${i}`,
-                count: 101 - i,
-                content: `Doc ${i}`,
-                ial: "",
-            })),
-        });
+    it("超过 100 篇时截断并标记 truncated，汇总仍用真实总数", async () => {
+        stub().fetchSyncPost = async (_url, data) => {
+            if (data.stmt.includes("COALESCE(SUM(count)")) {
+                return {code: 0, msg: "", data: [{docs: 101, blocks: 121}]};
+            }
+            return {
+                code: 0,
+                msg: "",
+                data: Array.from({length: 101}, (_, i) => ({
+                    id: `doc-${i}`,
+                    count: 101 - i,
+                    content: `Doc ${i}`,
+                    ial: "",
+                })),
+            };
+        };
 
         const result = await queryDayDocs("20240115", "created");
         assert.equal(result.truncated, true);
         assert.equal(result.docs.length, 100);
         assert.equal(result.docs[0].id, "doc-0");
         assert.equal(result.docs[99].id, "doc-99");
+        assert.equal(result.totalDocs, 101);
+        assert.equal(result.totalBlocks, 121);
     });
 });
 
@@ -124,34 +139,47 @@ describe("queryEarliestYear", () => {
 });
 
 describe("queryActivity", () => {
-    it("映射按日计数，缺省 count 当 0", async () => {
-        stub().fetchSyncPost = async () => ({
-            code: 0,
-            msg: "",
-            data: [
-                {date: "20240101", count: "12"},
-                {date: "20240102", count: null},
-            ],
-        });
+    it("映射按日计数，缺省 count / docs 当 0", async () => {
+        let calls = 0;
+        stub().fetchSyncPost = async (_url, data) => {
+            calls += 1;
+            if (data.stmt.includes("GROUP BY")) {
+                return {
+                    code: 0,
+                    msg: "",
+                    data: [
+                        {date: "20240101", count: "12", docs: "3"},
+                        {date: "20240102", count: null, docs: null},
+                    ],
+                };
+            }
+            return {code: 0, msg: "", data: [{docs: "5"}]};
+        };
 
-        const rows = await queryActivity("created", {
+        const result = await queryActivity("created", {
             displayMode: "recent",
             fromYear: null,
             weekStart: "monday",
             viewMode: "heatmap",
             includedBoxIds: null,
         });
-        assert.deepEqual(rows, [
-            {date: "20240101", count: 12},
-            {date: "20240102", count: 0},
-        ]);
+        assert.deepEqual(result, {
+            days: [
+                {date: "20240101", count: 12, docs: 3},
+                {date: "20240102", count: 0, docs: 0},
+            ],
+            totalDocs: 5,
+        });
+        assert.equal(calls, 2);
     });
 
     it("按年模式查询起点落在 fromYear 元旦", async () => {
-        let stmt = "";
+        let dayStmt = "";
         stub().fetchSyncPost = async (_url, data) => {
-            stmt = data.stmt;
-            return {code: 0, msg: "", data: []};
+            if (data.stmt.includes("GROUP BY") || data.stmt.includes("AS date")) {
+                dayStmt = data.stmt;
+            }
+            return {code: 0, msg: "", data: data.stmt.includes("GROUP BY") || data.stmt.includes("AS date") ? [] : [{docs: 0}]};
         };
 
         await queryActivity("created", {
@@ -162,18 +190,19 @@ describe("queryActivity", () => {
             includedBoxIds: null,
         });
 
-        assert.ok(stmt.includes("20240101000000"));
+        assert.ok(dayStmt.includes("20240101000000"));
+        assert.ok(dayStmt.includes("COUNT(DISTINCT root_id)"));
         // 结束边界为明天 0 点，不扫到次年元旦
         const tomorrow = new Date();
         tomorrow.setHours(0, 0, 0, 0);
         tomorrow.setDate(tomorrow.getDate() + 1);
         const endKey = `${tomorrow.getFullYear()}${String(tomorrow.getMonth() + 1).padStart(2, "0")}${String(tomorrow.getDate()).padStart(2, "0")}000000`;
-        assert.ok(stmt.includes(endKey));
-        assert.ok(!stmt.includes(`${new Date().getFullYear() + 1}0101000000`));
+        assert.ok(dayStmt.includes(endKey));
+        assert.ok(!dayStmt.includes(`${new Date().getFullYear() + 1}0101000000`));
         const start = new Date(2024, 0, 1);
         const end = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate());
         const days = Math.round((end.getTime() - start.getTime()) / 86_400_000);
-        assert.ok(stmt.includes(`LIMIT ${days}`));
+        assert.ok(dayStmt.includes(`LIMIT ${days}`));
     });
 
     it("getActivityCacheKey：布局切换（展示形式 / 周起始）不改变键", () => {
@@ -202,9 +231,11 @@ describe("queryActivity", () => {
     });
 
     it("白名单笔记本时 SQL 含 box IN", async () => {
-        let stmt = "";
+        let dayStmt = "";
         stub().fetchSyncPost = async (_url, data) => {
-            stmt = data.stmt;
+            if (data.stmt.includes("GROUP BY") || data.stmt.includes("AS date")) {
+                dayStmt = data.stmt;
+            }
             return {code: 0, msg: "", data: []};
         };
 
@@ -216,7 +247,7 @@ describe("queryActivity", () => {
             includedBoxIds: ["box-a", "box-b"],
         });
 
-        assert.ok(stmt.includes("box IN ('box-a', 'box-b')"));
+        assert.ok(dayStmt.includes("box IN ('box-a', 'box-b')"));
     });
 });
 

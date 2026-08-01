@@ -47,6 +47,8 @@ describe("getI18n", () => {
             assert.equal(i18n.months.length, 12);
             assert.equal(i18n.weekdays[0], "日");
             assert.ok(i18n.totalCount.includes("${count}"));
+            assert.ok(i18n.totalCount.includes("${docs}"));
+            assert.ok(i18n.cellTooltip.includes("${docs}"));
         });
     });
 

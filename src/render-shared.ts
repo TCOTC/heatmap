@@ -1,13 +1,20 @@
 import type {I18n} from "./i18n";
 import {formatLegendTooltip, type LevelThresholds} from "./levels";
 
-export function renderFooter(i18n: I18n, total: number, thresholds: LevelThresholds): HTMLElement {
+export function renderFooter(
+    i18n: I18n,
+    totalBlocks: number,
+    totalDocs: number,
+    thresholds: LevelThresholds,
+): HTMLElement {
     const footer = document.createElement("div");
     footer.className = "jchm__footer";
 
     const summary = document.createElement("div");
     summary.className = "jchm__summary";
-    summary.textContent = i18n.totalCount.replace("${count}", String(total));
+    summary.textContent = i18n.totalCount
+        .replace("${docs}", String(totalDocs))
+        .replace("${count}", String(totalBlocks));
     footer.appendChild(summary);
 
     const legend = document.createElement("div");
