@@ -2,6 +2,7 @@ import type {WeekStart} from "./types";
 
 const ZH_CN = {
     openHeatMap: "文档活跃统计",
+    openHeatMapCommand: "打开文档活跃统计弹窗",
     heatmapTitle: "文档活跃统计",
     loading: "加载中…",
     loadFailed: "加载失败，请查看开发者工具控制台报错",
@@ -62,6 +63,7 @@ export type I18n = typeof ZH_CN;
 
 const ZH_TW: I18n = {
     openHeatMap: "文檔活躍統計",
+    openHeatMapCommand: "打開文檔活躍統計彈窗",
     heatmapTitle: "文檔活躍統計",
     loading: "載入中…",
     loadFailed: "載入失敗，請查看開發者工具控制台報錯",
@@ -120,6 +122,7 @@ const ZH_TW: I18n = {
 
 const JA: I18n = {
     openHeatMap: "ドキュメント活動統計",
+    openHeatMapCommand: "ドキュメント活動統計ダイアログを開く",
     heatmapTitle: "ドキュメント活動統計",
     loading: "読み込み中…",
     loadFailed: "読み込みに失敗しました。開発者ツールのコンソールでエラーを確認してください",
@@ -178,6 +181,7 @@ const JA: I18n = {
 
 const EN: I18n = {
     openHeatMap: "Document Activity Stats",
+    openHeatMapCommand: "Open Document Activity Stats dialog",
     heatmapTitle: "Document Activity Stats",
     loading: "Loading…",
     loadFailed: "Load failed. Check the developer tools console for errors",

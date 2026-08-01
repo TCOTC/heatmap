@@ -42,6 +42,7 @@ describe("getI18n", () => {
         withLang("zh-CN", () => {
             const i18n = getI18n();
             assert.equal(i18n.openHeatMap, "文档活跃统计");
+            assert.equal(i18n.openHeatMapCommand, "打开文档活跃统计弹窗");
             assert.equal(i18n.weekdays.length, 7);
             assert.equal(i18n.months.length, 12);
             assert.equal(i18n.weekdays[0], "日");

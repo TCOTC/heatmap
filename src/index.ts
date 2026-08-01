@@ -144,6 +144,15 @@ export default class HeatMap extends Plugin {
             },
         });
 
+        this.addCommand({
+            langKey: "openHeatMap",
+            langText: i18n.openHeatMapCommand,
+            hotkey: "",
+            callback: () => {
+                this.openHeatMap();
+            },
+        });
+
         console.log(this.displayName, "plugin layout ready");
     }
 
