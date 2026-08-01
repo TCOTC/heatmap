@@ -69,6 +69,8 @@ export interface HeatMapConfigOptions {
     percentileThresholds: LevelCuts;
     /** 块数模式阈值（正整数块数），默认 1/10/40 */
     countThresholds: LevelCuts;
+    /** 是否记住主弹窗拖拽后的位置与尺寸（下次打开复用） */
+    persistPosition: boolean;
 }
 
 /** 统计范围 Dialog 中展示的笔记本条目 */

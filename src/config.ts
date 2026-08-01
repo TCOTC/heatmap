@@ -69,7 +69,7 @@ export interface OpenConfigMenuOptions {
     onOpenLevels: () => void;
 }
 
-/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、格子档位、颜色） */
+/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、格子档位、颜色、记住弹窗位置） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
     const {i18n, getConfig, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor, onOpenLevels} = options;
     const config = getConfig();
@@ -271,6 +271,16 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
         iconHTML: "",
         click: () => {
             onOpenColor();
+        },
+    });
+
+    menu.addItem({
+        id: "jchm-persist-position",
+        label: i18n.persistPosition,
+        iconHTML: "",
+        checked: config.persistPosition,
+        click: () => {
+            onChange({persistPosition: !getConfig().persistPosition});
         },
     });
 

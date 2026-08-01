@@ -54,6 +54,8 @@ import "./index.scss";
 const STORAGE_NAME = "config.json";
 /** 查询超过该时间仍未返回时，再显示 Loading 占位弹窗/面板 */
 const LOADING_DELAY_MS = 700;
+/** 主弹窗位置持久化在思源 local-dialogposition 中的键 */
+const DIALOG_POSITION_ID = "jchm-dialog";
 
 interface PluginConfig {
     statMode: StatMode;
@@ -67,6 +69,7 @@ interface PluginConfig {
     levelMode: LevelMode;
     percentileThresholds: LevelCuts;
     countThresholds: LevelCuts;
+    persistPosition: boolean;
 }
 
 export default class HeatMap extends Plugin {
@@ -84,6 +87,7 @@ export default class HeatMap extends Plugin {
         levelMode: "percentile",
         percentileThresholds: DEFAULT_PERCENTILE_THRESHOLDS,
         countThresholds: DEFAULT_COUNT_THRESHOLDS,
+        persistPosition: false,
     };
     private refreshing = false;
     /** 刷新进行中又收到配置变更时，结束后再刷一次最新配置 */
@@ -178,6 +182,7 @@ export default class HeatMap extends Plugin {
             levelMode: isLevelMode(raw.levelMode) ? raw.levelMode : "percentile",
             percentileThresholds: normalizeLevelCuts("percentile", raw.percentileThresholds),
             countThresholds: normalizeLevelCuts("count", raw.countThresholds),
+            persistPosition: raw.persistPosition === true,
         };
     }
 
@@ -319,6 +324,7 @@ export default class HeatMap extends Plugin {
         }
 
         this.dialog = new Dialog({
+            positionId: this.config.persistPosition ? DIALOG_POSITION_ID : undefined,
             title: i18n.heatmapTitle,
             content: content.outerHTML,
             width: "max-content",
@@ -334,6 +340,9 @@ export default class HeatMap extends Plugin {
             },
         });
 
+        if (this.config.persistPosition) {
+            this.dialog.element.setAttribute("data-key", DIALOG_POSITION_ID);
+        }
         this.dialog.element.querySelector(".b3-dialog")?.classList.add("jchm-dialog-host");
         this.dialog.element.querySelector(".b3-dialog__container")?.classList.add("jchm-dialog__container");
         this.mountSettingsButton(this.dialog.element);
@@ -385,6 +394,18 @@ export default class HeatMap extends Plugin {
         }
     }
 
+    /** 按配置给当前主弹窗挂上/摘掉思源 Dialog 位置持久化用的 data-key */
+    private syncDialogPositionKey() {
+        if (!this.dialog) {
+            return;
+        }
+        if (this.config.persistPosition) {
+            this.dialog.element.setAttribute("data-key", DIALOG_POSITION_ID);
+        } else {
+            this.dialog.element.removeAttribute("data-key");
+        }
+    }
+
     private async openSettingsMenu(rect: DOMRect) {
         const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
         const earliest = await this.resolveEarliestYear();
@@ -416,6 +437,12 @@ export default class HeatMap extends Plugin {
                 if (applied) {
                     return;
                 }
+            }
+
+            // 仅切换位置持久化：同步当前弹窗的 data-key，不刷新图表
+            if (keys.length === 1 && keys[0] === "persistPosition") {
+                this.syncDialogPositionKey();
+                return;
             }
 
             // 配置变了，DOM 缓存作废；若仍在热力图页则立刻刷新（活动数据可按查询键复用）
