@@ -520,8 +520,8 @@
         }
 
         /*
-         * 日历有日期文字：铺满着色但压低饱和，使全程可用 on-surface，
-         * 避免同月字色黑白跳变；贡献热力图仍用上面的满强度色阶。
+         * 日历有日期文字：铺满着色但压低饱和，全程用 on-surface；
+         * 热力主色在选色时已按 OKLCH 远离字色。贡献热力图仍用满强度色阶。
          */
         .jchm__cell--l1 {
           --jchm-cell-bg: color-mix(in srgb, var(--jchm-heat) 18%, var(--b3-theme-surface));
@@ -748,9 +748,12 @@
   }
 }
 
-/* 颜色：原生色板 + 使用主题色 */
+/* 颜色：色相滑条 + 色块预览 + 使用主题色 */
 .jchm-color {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 
   &__row {
     display: flex;
@@ -758,29 +761,28 @@
     gap: 12px;
   }
 
-  &__picker {
+  &__swatch {
     flex-shrink: 0;
-    width: 36px;
-    height: 36px;
-    padding: 0;
+    width: 28px;
+    height: 28px;
     border: 1px solid var(--b3-border-color);
     border-radius: var(--b3-border-radius);
-    background: transparent;
-    cursor: pointer;
     box-sizing: border-box;
+  }
 
-    &::-webkit-color-swatch-wrapper {
-      padding: 2px;
-    }
-
-    &::-webkit-color-swatch {
-      border: none;
-      border-radius: calc(var(--b3-border-radius) - 2px);
-    }
+  &__slider {
+    flex: 1 1 auto;
+    min-width: 120px;
   }
 
   &__reset {
     flex-shrink: 0;
+  }
+
+  &__hint {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--b3-theme-on-surface-light);
   }
 }
 

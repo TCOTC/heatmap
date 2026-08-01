@@ -401,6 +401,8 @@ export function normalizeIncludedBoxIds(value: unknown): string[] | null {
     return ids;
 }
 
+import {hexToOklch, projectHeatHex} from "./color-oklch";
+
 /**
  * 规范化热力主色：
  * - null / 空 / 非法 → null（跟随主题）
@@ -424,10 +426,28 @@ export function normalizeHeatColor(value: unknown): string | null {
     return null;
 }
 
-/** 把热力主色写到根节点 CSS 变量；null 则清除以回退主题色 */
+function resolveCssHex(host: Element, cssColor: string): string | null {
+    const probe = document.createElement("span");
+    probe.style.color = cssColor;
+    const parent = host.isConnected ? host : document.body;
+    parent.appendChild(probe);
+    const rgb = getComputedStyle(probe).color;
+    probe.remove();
+    const match = rgb.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    if (!match) {
+        return null;
+    }
+    const toHex = (n: string) => Number(n).toString(16).padStart(2, "0");
+    return `#${toHex(match[1])}${toHex(match[2])}${toHex(match[3])}`;
+}
+
+/** 把热力主色写到根节点 CSS 变量；null 则清除以回退主题色；自定义色会投影到安全明度 */
 export function applyHeatColor(el: HTMLElement, color: string | null): void {
     if (color) {
-        el.style.setProperty("--jchm-heat", color);
+        const textL = hexToOklch(resolveCssHex(el, "var(--b3-theme-on-surface)") || "")?.l ?? 0.25;
+        const surfaceL = hexToOklch(resolveCssHex(el, "var(--b3-theme-surface)") || "")?.l ?? 0.95;
+        const safe = projectHeatHex(color, textL, surfaceL) || color;
+        el.style.setProperty("--jchm-heat", safe);
     } else {
         el.style.removeProperty("--jchm-heat");
     }
