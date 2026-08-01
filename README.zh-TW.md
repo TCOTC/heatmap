@@ -37,6 +37,7 @@
 | 年份排序 | 最近的年份在前 / 在後 |
 | 每週第一天 | 週一或週日 |
 | 篩選筆記本 | 勾選要納入統計的筆記本，預設全部 |
+| 格子檔位 | 按百分位或絕對塊數自訂 1–4 級閾值 |
 | 格子顏色 | 自訂熱力主色 |
 
 ![設定選單](https://raw.githubusercontent.com/TCOTC/heatmap/main/pic/settings.webp)

@@ -37,6 +37,7 @@
 | 年份排序 | 最近的年份在前 / 在后 |
 | 每周第一天 | 周一或周日 |
 | 筛选笔记本 | 勾选要纳入统计的笔记本，默认全部 |
+| 格子档位 | 按百分位或绝对块数自定义 1–4 级阈值 |
 | 格子颜色 | 自定义热力主色 |
 
 ![设置菜单](https://raw.githubusercontent.com/TCOTC/heatmap/main/pic/settings.webp)

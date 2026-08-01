@@ -11,7 +11,18 @@ import type {DayCount, HeatMapConfigOptions, WeekStart} from "./types";
 export function renderHeatMap(
     days: DayCount[],
     i18n: I18n,
-    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "viewMode" | "color">,
+    config: Pick<
+        HeatMapConfigOptions,
+        | "weekStart"
+        | "displayMode"
+        | "fromYear"
+        | "yearOrder"
+        | "viewMode"
+        | "color"
+        | "levelMode"
+        | "percentileThresholds"
+        | "countThresholds"
+    >,
     onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
     if (config.viewMode === "calendar") {
@@ -24,10 +35,21 @@ export function renderHeatMap(
 function renderGithubView(
     days: DayCount[],
     i18n: I18n,
-    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "color">,
+    config: Pick<
+        HeatMapConfigOptions,
+        | "weekStart"
+        | "displayMode"
+        | "fromYear"
+        | "yearOrder"
+        | "color"
+        | "levelMode"
+        | "percentileThresholds"
+        | "countThresholds"
+    >,
     onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
-    const {weekStart, displayMode, fromYear, yearOrder, color} = config;
+    const {weekStart, displayMode, fromYear, yearOrder, color, levelMode, percentileThresholds, countThresholds} =
+        config;
     const countMap = new Map(days.map((d) => [d.date, d.count]));
     const periods = buildPeriods(countMap, displayMode, fromYear, weekStart, yearOrder);
 
@@ -37,7 +59,11 @@ function renderGithubView(
             allCounts.push(cell.count);
         }
     }
-    const {levelOf, thresholds} = calcLevels(allCounts);
+    const {levelOf, thresholds} = calcLevels(allCounts, {
+        mode: levelMode,
+        percentileThresholds,
+        countThresholds,
+    });
     const total = allCounts.reduce((sum: number, c: number) => sum + c, 0);
     const weekdayLabels = orderWeekdays(i18n.weekdays, weekStart);
 

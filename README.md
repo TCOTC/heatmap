@@ -37,6 +37,7 @@ Open the settings menu from the top-right of the stats panel to adjust:
 | Year order | Newest years first / last |
 | First day of week | Monday or Sunday |
 | Filter notebooks | Select which notebooks to include; all by default |
+| Cell levels | Customize levels 1–4 by percentile or absolute block counts |
 | Cell color | Customize the heatmap primary color |
 
 ![Settings menu](https://raw.githubusercontent.com/TCOTC/heatmap/main/pic/settings.webp)

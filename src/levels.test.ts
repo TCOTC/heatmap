@@ -18,7 +18,7 @@ const i18n = {
 } as I18n;
 
 describe("calcLevels", () => {
-    it("无正样本时全部映射为 0，阈值全为 0", () => {
+    it("无正样本时百分位模式全部映射为 0，阈值全为 0", () => {
         const {levelOf, thresholds} = calcLevels([]);
         assert.deepEqual(thresholds, [0, 0, 0]);
         assert.equal(levelOf(0), 0);
@@ -63,6 +63,45 @@ describe("calcLevels", () => {
         assert.equal(levelOf(5), 1);
         assert.equal(levelOf(6), 4);
         assert.deepEqual(thresholds, [5, 5, 5]);
+    });
+
+    it("自定义百分位改变分箱边界", () => {
+        const counts = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+        const defaults = calcLevels(counts);
+        const custom = calcLevels(counts, {
+            mode: "percentile",
+            percentileThresholds: [10, 20, 30],
+        });
+        assert.notDeepEqual(custom.thresholds, defaults.thresholds);
+        assert.ok(custom.thresholds[0] <= custom.thresholds[1]);
+        assert.ok(custom.thresholds[1] <= custom.thresholds[2]);
+        assert.ok(custom.levelOf(10) >= custom.levelOf(1));
+    });
+
+    it("块数模式按绝对阈值分档，不依赖样本分布", () => {
+        const {levelOf, thresholds} = calcLevels([0, 1, 100], {
+            mode: "count",
+            countThresholds: [2, 5, 10],
+        });
+        assert.deepEqual(thresholds, [2, 5, 10]);
+        assert.equal(levelOf(0), 0);
+        assert.equal(levelOf(1), 1);
+        assert.equal(levelOf(2), 1);
+        assert.equal(levelOf(3), 2);
+        assert.equal(levelOf(5), 2);
+        assert.equal(levelOf(6), 3);
+        assert.equal(levelOf(10), 3);
+        assert.equal(levelOf(11), 4);
+    });
+
+    it("块数模式在无正样本时仍使用配置阈值", () => {
+        const {levelOf, thresholds} = calcLevels([], {
+            mode: "count",
+            countThresholds: [3, 6, 9],
+        });
+        assert.deepEqual(thresholds, [3, 6, 9]);
+        assert.equal(levelOf(4), 2);
+        assert.equal(levelOf(10), 4);
     });
 });
 

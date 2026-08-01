@@ -34,7 +34,7 @@ export function renderDayLoading(options: RenderDayLoadingOptions): HTMLElement 
     backBtn.className = "jchm-day__back block__icon block__icon--show ariaLabel";
     backBtn.setAttribute("data-position", "north");
     backBtn.setAttribute("aria-label", i18n.back);
-    backBtn.innerHTML = `<svg><use xlink:href="#iconLeft"></use></svg>`;
+    backBtn.innerHTML = "<svg><use xlink:href=\"#iconLeft\"></use></svg>";
     backBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -69,7 +69,7 @@ export function renderDayDocList(options: RenderDayDocListOptions): HTMLElement 
     backBtn.className = "jchm-day__back block__icon block__icon--show ariaLabel";
     backBtn.setAttribute("data-position", "north");
     backBtn.setAttribute("aria-label", i18n.back);
-    backBtn.innerHTML = `<svg><use xlink:href="#iconLeft"></use></svg>`;
+    backBtn.innerHTML = "<svg><use xlink:href=\"#iconLeft\"></use></svg>";
     backBtn.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();

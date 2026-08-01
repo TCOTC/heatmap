@@ -695,3 +695,59 @@
   }
 }
 
+/* 格子档位：模式 + 三档上限 */
+.jchm-levels {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  &__mode {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  &__label {
+    color: var(--b3-theme-on-surface);
+    font-size: 14px;
+  }
+
+  &__select {
+    width: 100%;
+  }
+
+  &__hint {
+    color: var(--b3-theme-on-surface-light);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  &__cuts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  &__cut {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  &__cut-label {
+    color: var(--b3-theme-on-surface-light);
+    font-size: 12px;
+  }
+
+  &__input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  &__reset {
+    align-self: flex-start;
+  }
+}
+

@@ -15,6 +15,7 @@ import {
     applyHeatColor,
     getActivityCacheKey,
     isDisplayMode,
+    isLevelMode,
     isStatMode,
     isViewMode,
     isWeekStart,
@@ -22,8 +23,10 @@ import {
     normalizeFromYear,
     normalizeHeatColor,
     normalizeIncludedBoxIds,
+    normalizeLevelCuts,
     openColorDialog,
     openConfigMenu,
+    openLevelsDialog,
     openScopeDialog,
     queryActivity,
     queryDayDocs,
@@ -35,11 +38,17 @@ import {
     type DayDoc,
     type DayDocsResult,
     type DisplayMode,
+    type LevelCuts,
+    type LevelMode,
     type StatMode,
     type ViewMode,
     type WeekStart,
     type YearOrder,
 } from "./heatmap";
+import {
+    DEFAULT_COUNT_THRESHOLDS,
+    DEFAULT_PERCENTILE_THRESHOLDS,
+} from "./levels";
 import "./index.scss";
 
 const STORAGE_NAME = "config.json";
@@ -55,6 +64,9 @@ interface PluginConfig {
     viewMode: ViewMode;
     includedBoxIds: string[] | null;
     color: string | null;
+    levelMode: LevelMode;
+    percentileThresholds: LevelCuts;
+    countThresholds: LevelCuts;
 }
 
 export default class HeatMap extends Plugin {
@@ -69,6 +81,9 @@ export default class HeatMap extends Plugin {
         viewMode: "heatmap",
         includedBoxIds: null,
         color: null,
+        levelMode: "percentile",
+        percentileThresholds: DEFAULT_PERCENTILE_THRESHOLDS,
+        countThresholds: DEFAULT_COUNT_THRESHOLDS,
     };
     private refreshing = false;
     /** 刷新进行中又收到配置变更时，结束后再刷一次最新配置 */
@@ -98,7 +113,7 @@ export default class HeatMap extends Plugin {
 
     onload() {
         // 对齐思源 litheness：symbol + viewBox 24 + stroke currentColor 1.7
-        this.addIcons(`<symbol id="iconJCHMFlame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/></symbol>`);
+        this.addIcons("<symbol id=\"iconJCHMFlame\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4\"/></symbol>");
 
         this.configReady = this.loadData(STORAGE_NAME).then((data) => {
             this.config = this.normalizeConfig(data);
@@ -160,6 +175,9 @@ export default class HeatMap extends Plugin {
             viewMode: isViewMode(raw.viewMode) ? raw.viewMode : "heatmap",
             includedBoxIds: normalizeIncludedBoxIds(raw.includedBoxIds),
             color: normalizeHeatColor(raw.color),
+            levelMode: isLevelMode(raw.levelMode) ? raw.levelMode : "percentile",
+            percentileThresholds: normalizeLevelCuts("percentile", raw.percentileThresholds),
+            countThresholds: normalizeLevelCuts("count", raw.countThresholds),
         };
     }
 
@@ -461,6 +479,23 @@ export default class HeatMap extends Plugin {
                     },
                 });
             },
+            onOpenLevels: () => {
+                openLevelsDialog({
+                    i18n,
+                    isMobile: this.isMobile,
+                    levelMode: this.config.levelMode,
+                    percentileThresholds: this.config.percentileThresholds,
+                    countThresholds: this.config.countThresholds,
+                    onConfirm: (result) => {
+                        const same = this.config.levelMode === result.levelMode
+                            && sameCuts(this.config.percentileThresholds, result.percentileThresholds)
+                            && sameCuts(this.config.countThresholds, result.countThresholds);
+                        if (!same) {
+                            applyConfigPatch(result);
+                        }
+                    },
+                });
+            },
         });
     }
 
@@ -472,7 +507,7 @@ export default class HeatMap extends Plugin {
         const el = document.createElement("div");
         el.className = "jchm-loading";
         el.setAttribute("aria-label", getI18n().loading);
-        el.innerHTML = `<img width="48" height="48" src="/stage/loading-pure.svg" alt="">`;
+        el.innerHTML = "<img width=\"48\" height=\"48\" src=\"/stage/loading-pure.svg\" alt=\"\">";
         return el;
     }
 
@@ -754,4 +789,8 @@ export default class HeatMap extends Plugin {
             this.loadingDay = false;
         }
     }
+}
+
+function sameCuts(a: LevelCuts, b: LevelCuts): boolean {
+    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }

@@ -25,7 +25,7 @@ export function openColorDialog(options: OpenColorDialogOptions): void {
 
     const dialog = new Dialog({
         title: i18n.color,
-        content: `<div class="b3-dialog__content jchm-color"></div>`,
+        content: "<div class=\"b3-dialog__content jchm-color\"></div>",
         transparent: true,
         destroyCallback: () => {
             if (openDialog === dialog) {

@@ -16,6 +16,16 @@ export type DisplayMode = "recent" | "years";
  */
 export type ViewMode = "heatmap" | "calendar";
 
+/**
+ * 格子档位划分方式：
+ * - percentile：按正样本分位数（默认 25/50/75）
+ * - count：按绝对块数阈值
+ */
+export type LevelMode = "percentile" | "count";
+
+/** 三档上限（1/2/3 级），第 4 级为超过第三档 */
+export type LevelCuts = readonly [number, number, number];
+
 export interface DayCount {
     date: string; // YYYYMMDD
     count: number;
@@ -53,6 +63,12 @@ export interface HeatMapConfigOptions {
      * - null：跟随主题 --b3-theme-primary
      */
     color: string | null;
+    /** 格子档位划分方式 */
+    levelMode: LevelMode;
+    /** 百分位模式阈值（1–100），默认 25/50/75 */
+    percentileThresholds: LevelCuts;
+    /** 块数模式阈值（正整数块数），默认 1/10/40 */
+    countThresholds: LevelCuts;
 }
 
 /** 统计范围 Dialog 中展示的笔记本条目 */

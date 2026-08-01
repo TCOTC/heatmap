@@ -220,7 +220,7 @@ function createLoadingEl(i18n: I18n): HTMLElement {
     const el = document.createElement("div");
     el.className = "jchm-scope__loading";
     el.setAttribute("aria-label", i18n.loading);
-    el.innerHTML = `<img width="32" height="32" src="/stage/loading-pure.svg" alt="">`;
+    el.innerHTML = "<img width=\"32\" height=\"32\" src=\"/stage/loading-pure.svg\" alt=\"\">";
     return el;
 }
 

@@ -7,6 +7,7 @@ import {
     buildYearOptions,
     expandYearRange,
     isDisplayMode,
+    isLevelMode,
     isStatMode,
     isViewMode,
     isWeekStart,
@@ -14,6 +15,7 @@ import {
     normalizeFromYear,
     normalizeHeatColor,
     normalizeIncludedBoxIds,
+    normalizeLevelCuts,
 } from "./config";
 
 describe("expandYearRange", () => {
@@ -75,6 +77,10 @@ describe("配置值校验", () => {
         assert.equal(isViewMode("heatmap"), true);
         assert.equal(isViewMode("calendar"), true);
         assert.equal(isViewMode("list"), false);
+
+        assert.equal(isLevelMode("percentile"), true);
+        assert.equal(isLevelMode("count"), true);
+        assert.equal(isLevelMode("absolute"), false);
     });
 });
 
@@ -134,5 +140,25 @@ describe("normalizeHeatColor", () => {
         assert.equal(normalizeHeatColor("40c463"), "#40c463");
         assert.equal(normalizeHeatColor("#abc"), "#aabbcc");
         assert.equal(normalizeHeatColor(" AbC "), "#aabbcc");
+    });
+});
+
+describe("normalizeLevelCuts", () => {
+    it("非法输入回退到对应模式默认值", () => {
+        assert.deepEqual(normalizeLevelCuts("percentile", null), [25, 50, 75]);
+        assert.deepEqual(normalizeLevelCuts("percentile", [1, 2]), [25, 50, 75]);
+        assert.deepEqual(normalizeLevelCuts("count", "x"), [1, 10, 40]);
+        assert.deepEqual(normalizeLevelCuts("count", [0, 5, 10]), [1, 10, 40]);
+    });
+
+    it("百分位钳到 1–100 并升序", () => {
+        assert.deepEqual(normalizeLevelCuts("percentile", [75, 25, 50]), [25, 50, 75]);
+        assert.deepEqual(normalizeLevelCuts("percentile", [0, 150, 40]), [1, 40, 100]);
+        assert.deepEqual(normalizeLevelCuts("percentile", ["10", "20.4", "30"]), [10, 20, 30]);
+    });
+
+    it("块数取整并升序", () => {
+        assert.deepEqual(normalizeLevelCuts("count", [10, 2, 5]), [2, 5, 10]);
+        assert.deepEqual(normalizeLevelCuts("count", [2.6, 5.2, 10.9]), [3, 5, 11]);
     });
 });

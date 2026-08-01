@@ -1,8 +1,14 @@
 import {Menu} from "siyuan";
 import type {I18n} from "./i18n";
+import {
+    DEFAULT_COUNT_THRESHOLDS,
+    DEFAULT_PERCENTILE_THRESHOLDS,
+} from "./levels";
 import type {
     DisplayMode,
     HeatMapConfigOptions,
+    LevelCuts,
+    LevelMode,
     StatMode,
     ViewMode,
     WeekStart,
@@ -59,11 +65,13 @@ export interface OpenConfigMenuOptions {
     onOpenScope: () => void;
     /** 打开「颜色」十六进制配置 Dialog */
     onOpenColor: () => void;
+    /** 打开「格子档位」阈值 Dialog */
+    onOpenLevels: () => void;
 }
 
-/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、颜色） */
+/** 弹出配置菜单（展示形式、统计方式、显示范围、年份排序、每周第一天、筛选笔记本、格子档位、颜色） */
 export function openConfigMenu(options: OpenConfigMenuOptions): void {
-    const {i18n, getConfig, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor} = options;
+    const {i18n, getConfig, yearOptions, rect, isMobile, onChange, onOpenScope, onOpenColor, onOpenLevels} = options;
     const config = getConfig();
     const menu = new Menu("heatmap-config");
 
@@ -249,6 +257,15 @@ export function openConfigMenu(options: OpenConfigMenuOptions): void {
     });
 
     menu.addItem({
+        id: "heatmap-levels",
+        label: i18n.levels,
+        iconHTML: "",
+        click: () => {
+            onOpenLevels();
+        },
+    });
+
+    menu.addItem({
         id: "heatmap-color",
         label: i18n.color,
         iconHTML: "",
@@ -286,6 +303,42 @@ export function isDisplayMode(value: unknown): value is DisplayMode {
 
 export function isViewMode(value: unknown): value is ViewMode {
     return value === "heatmap" || value === "calendar";
+}
+
+export function isLevelMode(value: unknown): value is LevelMode {
+    return value === "percentile" || value === "count";
+}
+
+/**
+ * 规范化档位三元组：
+ * - 非数组 / 长度不足 → 回退默认
+ * - 百分位：整数钳到 1–100，再升序
+ * - 块数：正整数（≥ 1），再升序
+ */
+export function normalizeLevelCuts(mode: LevelMode, value: unknown): LevelCuts {
+    const fallback = mode === "percentile" ? DEFAULT_PERCENTILE_THRESHOLDS : DEFAULT_COUNT_THRESHOLDS;
+    if (!Array.isArray(value) || value.length < 3) {
+        return fallback;
+    }
+    const parsed: number[] = [];
+    for (let i = 0; i < 3; i++) {
+        const n = Number(value[i]);
+        if (!Number.isFinite(n)) {
+            return fallback;
+        }
+        if (mode === "percentile") {
+            const clamped = Math.min(100, Math.max(1, Math.round(n)));
+            parsed.push(clamped);
+        } else {
+            const int = Math.round(n);
+            if (int < 1) {
+                return fallback;
+            }
+            parsed.push(int);
+        }
+    }
+    parsed.sort((a, b) => a - b);
+    return [parsed[0], parsed[1], parsed[2]];
 }
 
 export function normalizeFromYear(value: unknown): number | null {

@@ -4,6 +4,8 @@ export type {
     DayDocsResult,
     DisplayMode,
     HeatMapConfigOptions,
+    LevelCuts,
+    LevelMode,
     ScopeNotebook,
     StatMode,
     ViewMode,
@@ -16,6 +18,7 @@ export {
     buildYearOptions,
     expandYearRange,
     isDisplayMode,
+    isLevelMode,
     isStatMode,
     isViewMode,
     isWeekStart,
@@ -23,11 +26,14 @@ export {
     normalizeFromYear,
     normalizeHeatColor,
     normalizeIncludedBoxIds,
+    normalizeLevelCuts,
     openConfigMenu,
     type OpenConfigMenuOptions,
 } from "./config";
 
 export {openColorDialog, type OpenColorDialogOptions} from "./color-dialog";
+
+export {openLevelsDialog, type OpenLevelsDialogOptions} from "./level-dialog";
 
 export {openScopeDialog, type OpenScopeDialogOptions} from "./scope-dialog";
 

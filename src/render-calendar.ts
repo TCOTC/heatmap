@@ -10,10 +10,21 @@ import type {DayCount, HeatMapConfigOptions} from "./types";
 export function renderCalendarView(
     days: DayCount[],
     i18n: I18n,
-    config: Pick<HeatMapConfigOptions, "weekStart" | "displayMode" | "fromYear" | "yearOrder" | "color">,
+    config: Pick<
+        HeatMapConfigOptions,
+        | "weekStart"
+        | "displayMode"
+        | "fromYear"
+        | "yearOrder"
+        | "color"
+        | "levelMode"
+        | "percentileThresholds"
+        | "countThresholds"
+    >,
     onDayClick?: (dateKey: string, count: number) => void,
 ): HTMLElement {
-    const {weekStart, displayMode, fromYear, yearOrder, color} = config;
+    const {weekStart, displayMode, fromYear, yearOrder, color, levelMode, percentileThresholds, countThresholds} =
+        config;
     const countMap = new Map(days.map((d) => [d.date, d.count]));
     const monthSpecs = buildMonthSpecs(displayMode, fromYear, yearOrder);
     const months = monthSpecs.map((spec) => buildMonthGrid(countMap, spec.year, spec.month, weekStart));
@@ -24,7 +35,11 @@ export function renderCalendarView(
             allCounts.push(cell.count);
         }
     }
-    const {levelOf, thresholds} = calcLevels(allCounts);
+    const {levelOf, thresholds} = calcLevels(allCounts, {
+        mode: levelMode,
+        percentileThresholds,
+        countThresholds,
+    });
     const total = allCounts.reduce((sum: number, c: number) => sum + c, 0);
     const weekdayLabels = orderWeekdays(i18n.weekdays, weekStart);
 
