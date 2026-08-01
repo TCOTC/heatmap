@@ -81,4 +81,14 @@ describe("heatHexFromHue / projectHeatHex", () => {
         assert.ok(Math.abs(oa.l - ob.l) < 0.03);
         assert.ok(Math.abs(oa.l - 0.2) >= HEAT_L_DELTA - 0.02);
     });
+
+    it("主题主色过深/过浅时会按当前字色重算明度", () => {
+        const deepTheme = {l: 0.1, c: 0.12, h: 140};
+        const paleTheme = {l: 0.95, c: 0.12, h: 140};
+        const lifted = hexToOklch(heatHexFromHue(140, deepTheme, 0.2, 0.95));
+        const lowered = hexToOklch(heatHexFromHue(140, paleTheme, 0.92, 0.2));
+        assert.ok(lifted && lowered);
+        assert.ok(lifted.l >= 0.2 + HEAT_L_DELTA - 0.02);
+        assert.ok(lowered.l <= 0.92 - HEAT_L_DELTA + 0.02);
+    });
 });

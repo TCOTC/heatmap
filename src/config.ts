@@ -1,4 +1,5 @@
 import {Menu} from "siyuan";
+import {heatHexFromHue, hexToOklch} from "./color-oklch";
 import type {I18n} from "./i18n";
 import {
     DEFAULT_COUNT_THRESHOLDS,
@@ -401,8 +402,6 @@ export function normalizeIncludedBoxIds(value: unknown): string[] | null {
     return ids;
 }
 
-import {hexToOklch, projectHeatHex} from "./color-oklch";
-
 /**
  * 规范化热力主色：
  * - null / 空 / 非法 → null（跟随主题）
@@ -441,13 +440,18 @@ function resolveCssHex(host: Element, cssColor: string): string | null {
     return `#${toHex(match[1])}${toHex(match[2])}${toHex(match[3])}`;
 }
 
-/** 把热力主色写到根节点 CSS 变量；null 则清除以回退主题色；自定义色会投影到安全明度 */
+/**
+ * 把热力主色写到根节点 CSS 变量；null 则清除以回退主题色。
+ * 自定义色只保留色相，L/C 按当前主题与字色重新钳制（明暗切换后需再调用）。
+ */
 export function applyHeatColor(el: HTMLElement, color: string | null): void {
     if (color) {
         const textL = hexToOklch(resolveCssHex(el, "var(--b3-theme-on-surface)") || "")?.l ?? 0.25;
         const surfaceL = hexToOklch(resolveCssHex(el, "var(--b3-theme-surface)") || "")?.l ?? 0.95;
-        const safe = projectHeatHex(color, textL, surfaceL) || color;
-        el.style.setProperty("--jchm-heat", safe);
+        const themeHex = resolveCssHex(el, "var(--b3-theme-primary)") || "#3575f0";
+        const themeOklch = hexToOklch(themeHex) ?? {l: 0.55, c: 0.14, h: 250};
+        const hue = hexToOklch(color)?.h ?? themeOklch.h;
+        el.style.setProperty("--jchm-heat", heatHexFromHue(hue, themeOklch, textL, surfaceL));
     } else {
         el.style.removeProperty("--jchm-heat");
     }

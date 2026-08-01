@@ -113,6 +113,8 @@ export default class HeatMap extends Plugin {
     private configReady: Promise<void> = Promise.resolve();
     /** 串行化 saveData，避免并发写回旧配置 */
     private saveChain: Promise<void> = Promise.resolve();
+    /** 外观切换后延迟重算热力色（等主题 CSS 生效） */
+    private heatColorThemeTimer = 0;
     /**
      * 弹窗生命周期内的 SQL 结果缓存。
      * 弹窗打开后用户通常无法编辑文档，数据可视为稳定；关闭时全部清空。
@@ -161,10 +163,15 @@ export default class HeatMap extends Plugin {
             },
         });
 
+        // 明暗 / 主题切换后按当前字色与主题主色重算自定义热力色
+        this.eventBus.on("ws-main", this.onWsMain);
+
         console.log(this.displayName, "plugin layout ready");
     }
 
     onunload() {
+        this.eventBus.off("ws-main", this.onWsMain);
+        window.clearTimeout(this.heatColorThemeTimer);
         this.abortAllLoads();
         this.dialog?.destroy();
         console.log(this.displayName, "plugin unloaded");
@@ -530,6 +537,35 @@ export default class HeatMap extends Plugin {
             return;
         }
         this.applyConfigPatch(displayRangeOptionToPatch(next));
+    }
+
+    /** 外观 / 主题 CSS 刷新后，重算已打开面板上的自定义热力色 */
+    private onWsMain = (event: CustomEvent) => {
+        const cmd = (event as CustomEvent<{cmd?: string;}>).detail?.cmd;
+        if (cmd !== "setAppearance" && cmd !== "refreshtheme") {
+            return;
+        }
+        window.clearTimeout(this.heatColorThemeTimer);
+        // 等主题 stylesheet / CSS 变量写入后再读 on-surface / primary
+        this.heatColorThemeTimer = window.setTimeout(() => {
+            this.reapplyOpenHeatColors();
+        }, 80);
+    };
+
+    private reapplyOpenHeatColors() {
+        if (!this.config.color) {
+            return;
+        }
+        const chartHost = this.dialog?.element.querySelector(".jchm-panel__chart") as HTMLElement | null;
+        const roots = [
+            chartHost?.querySelector(".jchm"),
+            this.cachedHeatmapPanel?.querySelector(".jchm"),
+        ];
+        for (const root of roots) {
+            if (root instanceof HTMLElement) {
+                applyHeatColor(root, this.config.color);
+            }
+        }
     }
 
     /** 应用配置补丁：持久化并按需刷新图表 / 标题栏范围 */

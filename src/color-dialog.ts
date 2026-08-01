@@ -2,7 +2,6 @@ import {Dialog} from "siyuan";
 import {
     heatHexFromHue,
     hexToOklch,
-    projectHeatHex,
     type Oklch,
 } from "./color-oklch";
 import type {I18n} from "./i18n";
@@ -96,13 +95,10 @@ export function openColorDialog(options: OpenColorDialogOptions): void {
         setPreview(hex, hex);
     };
 
-    // 已存 hex：投影到安全色并预览；主题色：滑条跟主题色相，current 仍为 null
+    // 已存 hex：只取色相，按当前主题重算安全色；主题色：滑条跟主题色相，current 仍为 null
     if (color) {
-        const projected = projectHeatHex(color, textL, surfaceL) || color;
-        const oklch = hexToOklch(projected);
-        const hue = oklch?.h ?? themeOklch.h;
-        slider.value = String(Math.round(hue));
-        setPreview(projected, projected);
+        const hue = hexToOklch(color)?.h ?? themeOklch.h;
+        applyHue(hue, false);
     } else {
         applyHue(themeOklch.h, true);
     }
