@@ -103,6 +103,8 @@ export default class HeatMap extends Plugin {
     private rangeNavYearOptions: number[] = [];
     /** 监听弹窗宽度：过窄时隐藏标题，更窄时收起范围文案只留箭头 */
     private titleVisibilityObserver?: ResizeObserver;
+    /** 下次挂载图表后按内容重新撑开弹窗（视图 / 范围切换） */
+    private pendingDialogFit = false;
     /** 打开统计面板时的请求；关闭弹窗或重复打开前 abort */
     private openAbort?: AbortController;
     /** 日详情请求；关闭弹窗 / 返回热力图时 abort */
@@ -360,6 +362,7 @@ export default class HeatMap extends Plugin {
                 this.dialog = undefined;
                 this.view = "heatmap";
                 this.cachedHeatmapPanel = null;
+                this.pendingDialogFit = false;
                 this.clearQueryCaches();
                 this.refreshing = false;
                 this.refreshQueued = false;
@@ -413,11 +416,12 @@ export default class HeatMap extends Plugin {
         next.innerHTML = "<svg><use xlink:href=\"#iconRight\"></use></svg>";
 
         const stopDrag = (event: Event) => {
-            // 避免点切换时触发标题栏 drag；勿 stopPropagation，否则设置菜单点别处关不掉
+            // 必须 stopPropagation：思源在 container mousedown 里只要点到 resize__move
+            //（标题栏）就会把 width 钉成像素，之后 max-content 再也撑不开
             event.preventDefault();
+            event.stopPropagation();
         };
-        prev.addEventListener("mousedown", stopDrag);
-        next.addEventListener("mousedown", stopDrag);
+        nav.addEventListener("mousedown", stopDrag);
         prev.addEventListener("click", (event) => {
             event.preventDefault();
             this.shiftDisplayRange(1);
@@ -574,6 +578,7 @@ export default class HeatMap extends Plugin {
         const prevScopeKey = this.earliestYearScopeKey();
         const rangeChanged = Object.prototype.hasOwnProperty.call(patch, "displayMode")
             || Object.prototype.hasOwnProperty.call(patch, "fromYear");
+        const viewChanged = Object.prototype.hasOwnProperty.call(patch, "viewMode");
 
         this.config = {...this.config, ...patch};
         this.saveConfig();
@@ -614,6 +619,11 @@ export default class HeatMap extends Plugin {
             return;
         }
 
+        // 视图 / 显示范围变化后按内容重新撑开（避免曾被拖拽钉死的宽高卡住）
+        if (rangeChanged || viewChanged) {
+            this.pendingDialogFit = true;
+        }
+
         // 配置变了，DOM 缓存作废；日详情中改范围则回到热力图
         this.cachedHeatmapPanel = null;
         if (rangeChanged && this.view === "day") {
@@ -626,6 +636,22 @@ export default class HeatMap extends Plugin {
         if (chartHost && this.view === "heatmap") {
             this.refreshChart(chartHost);
         }
+    }
+
+    /**
+     * 把主弹窗容器恢复为内容驱动尺寸。
+     * 思源 Dialog 在标题栏 mousedown / 拖拽改尺寸后会写入像素 width/height，
+     * 不清掉的话切换视图或范围时无法再随内容变化。
+     */
+    private fitDialogToContent() {
+        const container = this.dialog?.element.querySelector(".jchm-dialog__container") as HTMLElement | null;
+        if (!container) {
+            return;
+        }
+        container.style.width = "max-content";
+        container.style.height = "auto";
+        container.style.maxWidth = "";
+        container.style.maxHeight = "";
     }
 
     private mountHeatmapPanel(container: HTMLElement, days: DayCount[], totalDocs: number) {
@@ -848,6 +874,10 @@ export default class HeatMap extends Plugin {
         chartHost.replaceChildren(renderHeatMap(days, i18n, this.config, (dateKey) => {
             this.openDayDetail(dateKey);
         }, totalDocs));
+        if (this.pendingDialogFit) {
+            this.pendingDialogFit = false;
+            this.fitDialogToContent();
+        }
     }
 
     private async refreshChart(chartHost: HTMLElement) {
