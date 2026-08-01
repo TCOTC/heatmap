@@ -209,8 +209,12 @@
         min-width: 0;
         overflow-x: hidden;
         overflow-y: auto;
-        /* 左 24px；右 14px + scrollbar-gutter 10px = 24px，与 footer 对齐且避免有无滚动条时跳动 */
-        padding: 0 var(--jchm-pad-x);
+        /*
+         * 上下各 2px：给 hover outline（1px + offset 1px）留出绘制空间，
+         * 避免贴滚动视口上下边时被 overflow 裁切。
+         * 左 24px；右 14px + scrollbar-gutter 10px = 24px，与 footer 对齐且避免有无滚动条时跳动。
+         */
+        padding: 2px var(--jchm-pad-x);
         padding-right: calc(var(--jchm-pad-x) - var(--jchm-scrollbar));
         box-sizing: border-box;
         scrollbar-gutter: stable;
@@ -220,7 +224,8 @@
       &__scroll-x {
         overflow-x: auto;
         overflow-y: hidden;
-        padding-bottom: 4px;
+        /* 上/右 2px 留给 hover outline；左侧靠星期列间隙已够；底 4px 兼顾横条 */
+        padding: 2px 2px 4px 0;
       }
 
       /*
@@ -238,13 +243,13 @@
         min-width: 0;
         gap: 0;
 
-        /* 24px * 2 padding + 星期列 + 周数 * (11px cell + 3px gap) */
+        /* 24px * 2 外边距 + scroll-x 右侧 2px（hover outline）+ 星期列 + 周数 * (11px cell + 3px gap) */
         &::before {
           content: "";
           display: block;
           height: 0;
           overflow: hidden;
-          width: calc(48px + var(--jchm-weekday-col, 18px) + var(--jchm-weeks, 53) * 14px);
+          width: calc(50px + var(--jchm-weekday-col, 18px) + var(--jchm-weeks, 53) * 14px);
         }
 
         .jchm__scroll {
@@ -255,9 +260,10 @@
           box-sizing: border-box;
           width: 100%;
           min-width: 0;
+          /* 100cqw 含 scroll-x 右侧 padding 2px，需扣掉再算 cell */
           --jchm-cell: max(
             7px,
-            calc((100cqw - var(--jchm-weekday-col, 18px)) * 11 / (var(--jchm-weeks, 53) * 14))
+            calc((100cqw - 2px - var(--jchm-weekday-col, 18px)) * 11 / (var(--jchm-weeks, 53) * 14))
           );
           --jchm-gap: calc(var(--jchm-cell) * 3 / 11);
         }
