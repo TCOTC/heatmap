@@ -418,10 +418,12 @@ export default class HeatMap extends Plugin {
         const stopDrag = (event: Event) => {
             // 必须 stopPropagation：思源在 container mousedown 里只要点到 resize__move
             //（标题栏）就会把 width 钉成像素，之后 max-content 再也撑不开
+            // 只拦左右按钮；中间 label 仍可冒泡，以便拖拽弹窗
             event.preventDefault();
             event.stopPropagation();
         };
-        nav.addEventListener("mousedown", stopDrag);
+        prev.addEventListener("mousedown", stopDrag);
+        next.addEventListener("mousedown", stopDrag);
         prev.addEventListener("click", (event) => {
             event.preventDefault();
             this.shiftDisplayRange(1);
