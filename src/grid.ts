@@ -157,21 +157,22 @@ export function buildMonthGrid(
     return {year, month, cells, weeks};
 }
 
-/** 按实际显示的 weekday 文案测量列宽（取最长） */
-const weekdayColWidthCache = new Map<string, number>();
+/** 文案宽度测量缓存（键为文案组合） */
+const textWidthCache = new Map<string, number>();
 
-export function measureWeekdayColumnWidth(labels: string[]): number {
+/** 按 12px 字号（与 .jchm 对齐）测量最宽文案；无文案时返回 0 */
+function measureMaxTextWidth(labels: string[]): number {
     const unique = [...new Set(labels.filter(Boolean))];
     if (unique.length === 0) {
-        return 18;
+        return 0;
     }
     const cacheKey = unique.join("\0");
-    const cached = weekdayColWidthCache.get(cacheKey);
+    const cached = textWidthCache.get(cacheKey);
     if (cached != null) {
         return cached;
     }
     const probe = document.createElement("div");
-    // 与 .jchm 字号对齐；探测节点挂在 body 上时拿不到嵌套选择器样式
+    // 探测节点挂在 body 上时拿不到嵌套选择器样式，故字号写死在行内
     probe.style.cssText = "position:absolute;visibility:hidden;pointer-events:none;left:0;top:0;font-size:12px;";
     const span = document.createElement("span");
     span.style.whiteSpace = "nowrap";
@@ -183,9 +184,23 @@ export function measureWeekdayColumnWidth(labels: string[]): number {
         max = Math.max(max, span.getBoundingClientRect().width);
     }
     probe.remove();
-    const width = Math.max(Math.ceil(max), 1);
-    weekdayColWidthCache.set(cacheKey, width);
+    const width = Math.ceil(max);
+    textWidthCache.set(cacheKey, width);
     return width;
+}
+
+/** 按实际显示的 weekday 文案测量列宽（取最长） */
+export function measureWeekdayColumnWidth(labels: string[]): number {
+    const width = measureMaxTextWidth(labels);
+    return width > 0 ? width : 18;
+}
+
+/**
+ * 末月文案向右的溢出留白：文案宽 - 最小格子边长（7px）。
+ * 月份标签盒宽只有一格，「11 月」必然向右超出；留出这段空间才能在不撑大滚动宽度的前提下完整显示。
+ */
+export function measureMonthLabelReserve(months: string[]): number {
+    return Math.max(measureMaxTextWidth(months) - 7, 0);
 }
 
 export function buildMonthLabels(weeks: GridCell[][], months: string[]): string[] {

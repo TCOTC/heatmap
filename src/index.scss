@@ -242,14 +242,22 @@
         width: 100%;
         min-width: 0;
         gap: 0;
+        /*
+         * 月份标签盒只有一格宽，末月文案必然向右溢出。
+         * 在宽度公式里预留这段（文案宽 - 最小 cell 7px），由 .jchm__months 的右侧 padding 承接，
+         * 这样末月文案能完整显示，且总宽度不变（不会多出横向条）。JS 会按实际语言覆写。
+         */
+        --jchm-month-reserve: 19px;
 
-        /* 24px * 2 外边距 + scroll-x 右侧 2px（hover outline）+ 星期列 + 周数 * (11px cell + 3px gap) */
+        /* 24px * 2 外边距 + scroll-x 右侧 2px（hover outline）+ 星期列 + 末月文案留白 + 周数 * (11px cell + 3px gap) */
         &::before {
           content: "";
           display: block;
           height: 0;
           overflow: hidden;
-          width: calc(50px + var(--jchm-weekday-col, 18px) + var(--jchm-weeks, 53) * 14px);
+          width: calc(
+            50px + var(--jchm-weekday-col, 18px) + var(--jchm-month-reserve) + var(--jchm-weeks, 53) * 14px
+          );
         }
 
         .jchm__scroll {
@@ -260,10 +268,13 @@
           box-sizing: border-box;
           width: 100%;
           min-width: 0;
-          /* 100cqw 含 scroll-x 右侧 padding 2px，需扣掉再算 cell */
+          /* 100cqw 含 scroll-x 右侧 padding 2px，再扣掉星期列与末月文案留白，然后算 cell */
           --jchm-cell: max(
             7px,
-            calc((100cqw - 2px - var(--jchm-weekday-col, 18px)) * 11 / (var(--jchm-weeks, 53) * 14))
+            calc(
+              (100cqw - 2px - var(--jchm-weekday-col, 18px) - var(--jchm-month-reserve)) * 11 /
+                (var(--jchm-weeks, 53) * 14)
+            )
           );
           --jchm-gap: calc(var(--jchm-cell) * 3 / 11);
         }
@@ -294,7 +305,8 @@
       }
 
       &__months {
-        /* 裁掉月末文案溢出，避免撑出几乎无法滚动的横向条 */
+        /* 右侧留白承接末月文案的溢出；在此之内的越界一律裁掉，避免撑出几乎无法滚动的横向条 */
+        padding-right: var(--jchm-month-reserve, 0px);
         overflow: hidden;
 
         .jchm__months-spacer {

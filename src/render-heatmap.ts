@@ -1,6 +1,12 @@
 import {formatDisplayDate, isSparseWeekday, orderWeekdays} from "./date";
 import {applyHeatColor} from "./config";
-import {buildMonthLabels, buildPeriods, measureWeekdayColumnWidth, type PeriodGrid} from "./grid";
+import {
+    buildMonthLabels,
+    buildPeriods,
+    measureMonthLabelReserve,
+    measureWeekdayColumnWidth,
+    type PeriodGrid,
+} from "./grid";
 import type {I18n} from "./i18n";
 import {calcLevels} from "./levels";
 import {renderCalendarView} from "./render-calendar";
@@ -78,6 +84,8 @@ function renderGithubView(
 
     const visibleWeekdayLabels = weekdayLabels.filter((_, index) => isSparseWeekday(index, weekStart));
     root.style.setProperty("--jchm-weekday-col", `${measureWeekdayColumnWidth(visibleWeekdayLabels)}px`);
+    // 月份标签盒只有一格宽，末月文案会向右溢出；预留这段宽度，避免被裁或撑出横向条
+    root.style.setProperty("--jchm-month-reserve", `${measureMonthLabelReserve(i18n.months)}px`);
 
     // 外层竖滚、内层横滚拆开，避免双轴 overflow:auto 互相挤出无效滚动条
     const scrollY = document.createElement("div");
